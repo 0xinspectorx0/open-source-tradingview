@@ -47,11 +47,13 @@ def real_symbol(ticker):
     """Chart ticker -> Binance futures symbol with real buyer/seller data, or None.
     RMT_XAUUSD -> XAUUSDT, RMT_BTCUSD -> BTCUSDT, BYBIT_BTCUSDT -> BTCUSDT, BTCUSD (binance feed) -> BTCUSDT."""
     t = ticker.upper().split(":")[-1]
-    for p in ("RMT_", "BYBIT_S_", "BYBIT_I_", "BYBIT_"):
+    # Deriv names: frxXAUUSD (forex/metals), cryETHUSD (crypto). Same Binance market as the other feeds; the price
+    # shift lines Binance up with Deriv's own price (2026-11-15: cryETHUSD was missed and showed an all-zero estimate).
+    for p in ("RMT_", "BYBIT_S_", "BYBIT_I_", "BYBIT_", "FRX", "CRY"):
         if t.startswith(p):
             t = t[len(p):]
             break
-    if t.endswith((".MARK", ".INDEX")) or t.startswith("FRX"):
+    if t.endswith((".MARK", ".INDEX")):
         return None
     if t.endswith("USD247"):
         t = t[:-3]
@@ -71,7 +73,7 @@ def _binance_rows(sym, itf, a, b):
     out, start, step = {}, a * 1000, TF_SEC[itf] * 1000
     while start <= b * 1000:
         url = f"{FAPI}/klines?symbol={sym}&interval={BINANCE_TF[itf]}&startTime={start}&endTime={b * 1000}&limit=1500"
-        rows = json.loads(urllib.request.urlopen(url, timeout=20).read())
+        rows = _ot.WEIGHT.get(url, 10)
         if not rows:
             break
         for k in rows:
@@ -138,6 +140,34 @@ def _rows(source, ticker, itf, a, b, history):
         return {t: v for t, v in have.items() if a <= t <= b}
 
 
+def _need_volume(rows):
+    """An estimate is built from the feed's own volume; a feed with none (Deriv) would draw zeros everywhere."""
+    if rows and not any(v[0] or v[1] for v in rows.values()):
+        raise ValueError("this feed sends no volume and has no Binance match, so there is no order flow to show")
+    return rows
+
+
+def _shift(lower, chart, sec, isec):
+    """Gap (chart price - Binance price) for every lower bar: median of the last 30 chart candles that had closed
+    by then (past only). chart: the chart's own candles at the chart timeframe. Bars before the first known gap use it."""
+    import bisect
+    pts = []
+    for t in sorted(chart):
+        k = t + sec - isec                  # the lower bar that closes this chart candle
+        if k in lower:
+            pts.append((k, chart[t][5] - lower[k][5]))
+    if not pts:
+        return {t: 0.0 for t in lower}
+    keys, meds, win = [p[0] for p in pts], [], []
+    for _, g in pts:
+        win.append(g); win = win[-30:]; meds.append(sorted(win)[len(win) // 2])
+    out = {}
+    for t in lower:
+        i = bisect.bisect_right(keys, t) - 1
+        out[t] = meds[max(i, 0)]
+    return out
+
+
 def pick_source(ticker, source="auto"):
     if source == "real":
         return "real" if real_symbol(ticker) else None
@@ -159,6 +189,8 @@ def delta(ticker, tf, start_s, end_s, source="auto", history=None):
     if start_s % sec and tf != "D1":
         start_s += sec - start_s % sec  # whole bars only: a half-read first bar would show a wrong delta
     lower = _rows(src, ticker, itf, start_s, int(end_s) + sec - isec, history)
+    if src == "estimated":
+        _need_volume(lower)
     out, cur = [], None
     for t in sorted(lower):
         bt = t - t % sec if tf != "D1" else t - t % 86400
@@ -269,21 +301,16 @@ def profile(ticker, tf, start_s, end_s, source="auto", history=None, mode="sessi
             t += 3600
         start_s = t
     end_i = int(end_s) + sec - isec
-    chart = _rows("estimated", ticker, itf, start_s, end_i, history)
-    lower = chart if src == "estimated" else _rows("real", ticker, itf, start_s, end_i, history)
     shift_note = None
-    if src == "real":
-        gaps, shifted = [], {}
-        for t in sorted(lower):
-            if t in chart:
-                gaps.append(chart[t][5] - lower[t][5]); gaps = gaps[-30:]
-            if not gaps:
-                continue
-            g = sorted(gaps)[len(gaps) // 2]
-            b_, s_, sg, h, l, c = lower[t]
-            shifted[t] = (b_, s_, sg, h + g, l + g, c + g)
-        lower = shifted
-        shift_note = "Binance prices shifted onto the chart price (median gap of the last 30 lower bars)"
+    if src == "estimated":
+        lower = _need_volume(_rows("estimated", ticker, itf, start_s, end_i, history))
+    else:
+        # The chart's own candles (chart timeframe: one short request) only line Binance prices up with the broker.
+        # Asking the feed for 20,000 one-minute candles took ~25 s over the remote MT5 link (2026-11-15).
+        lower = _rows("real", ticker, itf, start_s, end_i, history)
+        g_at = _shift(lower, _rows("estimated", ticker, tf, start_s - 30 * sec, int(end_s), history), sec, isec)
+        lower = {t: (v[0], v[1], v[2], v[3] + g_at[t], v[4] + g_at[t], v[5] + g_at[t]) for t, v in lower.items() if t in g_at}
+        shift_note = "Binance prices shifted onto the chart price (median gap of the last 30 chart candles)"
     groups = {}
     for t in sorted(lower):
         groups.setdefault(session_of(t, mode), []).append(t)
@@ -312,124 +339,15 @@ def profile(ticker, tf, start_s, end_s, source="auto", history=None, mode="sessi
     return out, info
 
 
-# ---------------- Step 3: footprint from every trade (2026-11-12) ----------------
-# Real symbols: every Binance futures aggregated trade (exact aggressor side). Complete UTC days come from
-# data.binance.vision daily files (cached as parquet by orderflow.py, in hub/.cache); today comes from the REST
-# aggTrades list, filled newest-first by one background thread per symbol at a gentle pace (rate-limit safe).
-# Estimated symbols: the chart's own 1-minute candles spread over their high-low range (coarse; labelled).
-import sys as _sys, os as _os, datetime as _dt
-# Daily trade files are big (BTCUSDT ~30 MB zipped per day, gold ~8 MB). Footprints use at most this many past days,
-# plus today; older candles show no footprint (covered_from tells the chart). Stops a 1h/1D footprint from
-# downloading weeks of files (2026-11-15).
-MAX_PAST_DAYS = 2
-REST_CALLS_PER_MIN = 40          # aggTrades weight 20 each: 800 of the 2400 Binance allows per minute
-MAX_TODAY_HOURS = 24
-
-
-def _utc_ms(d):
-    return int(_dt.datetime(d.year, d.month, d.day, tzinfo=_dt.timezone.utc).timestamp() * 1000)
-
-
-class _TradeStore:
-    """Trades of one Binance symbol: daily files for past days, REST for today (background fill)."""
-
-    def __init__(self, sym):
-        self.sym, self.lock = sym, threading.Lock()
-        self.days = {}                      # date -> (t_ms, price, qty, side) numpy arrays
-        self.rest = []                      # (id, t_ms, price, qty, side), sorted by id
-        self.floor_ms = None                # how far back the REST fill should reach
-        self.thread = None
-        self.last_used = time.time()
-
-    def _rest(self, **kw):
-        q = "&".join(f"{k}={v}" for k, v in kw.items())
-        rows = json.loads(urllib.request.urlopen(f"{FAPI}/aggTrades?symbol={self.sym}&limit=1000&{q}", timeout=20).read())
-        return [(r["a"], r["T"], float(r["p"]), float(r["q"]), -1 if r["m"] else 1) for r in rows]
-
-    def _fill(self):
-        """Background: keep up with new trades, then walk back toward floor_ms. Stops after 10 idle minutes."""
-        pause = 60.0 / REST_CALLS_PER_MIN
-        while time.time() - self.last_used < 600:
-            try:
-                with self.lock:
-                    newest = self.rest[-1][0] if self.rest else None
-                    oldest = self.rest[0] if self.rest else None
-                    floor = self.floor_ms
-                got = self._rest(fromId=newest + 1) if newest is not None else self._rest()
-                with self.lock:
-                    self.rest.extend(x for x in got if not self.rest or x[0] > self.rest[-1][0])
-                if len(got) < 1000 and oldest is not None and floor is not None and oldest[1] > floor:
-                    time.sleep(pause)
-                    back = [x for x in self._rest(fromId=max(0, oldest[0] - 1000)) if x[0] < oldest[0]]
-                    with self.lock:
-                        self.rest[:0] = back
-                time.sleep(pause if len(got) == 1000 or (oldest and floor and oldest[1] > floor) else 2.0)
-            except Exception:
-                time.sleep(10)
-        self.thread = None
-
-    def ensure(self, from_ms):
-        self.last_used = time.time()
-        floor = max(from_ms, int(time.time() * 1000) - MAX_TODAY_HOURS * 3600 * 1000)
-        with self.lock:
-            self.floor_ms = floor if self.floor_ms is None else min(self.floor_ms, floor)
-        if self.thread is None:
-            self.thread = threading.Thread(target=self._fill, daemon=True)
-            self.thread.start()
-
-    def day(self, d):
-        if d not in self.days:
-            import orderflow as _of
-            import pandas as pd
-            df = pd.read_parquet(_of.fetch_day(d, "aggTrades", self.sym))
-            ms = ((df["ts"] - pd.Timestamp(0, tz="UTC")) // pd.Timedelta(milliseconds=1)).to_numpy().astype("int64")  # any pandas time unit
-            self.days[d] = (ms, df["price"].to_numpy(), df["qty"].to_numpy(),
-                            df["side"].to_numpy())
-        return self.days[d]
-
-    def trades(self, t0_ms, t1_ms):
-        """(t_ms, price, qty, side) arrays for [t0, t1], plus the earliest time actually covered so far."""
-        import numpy as np
-        out, covered, rest_from = [], t1_ms, None
-        today = _dt.datetime.now(_dt.timezone.utc).date()
-        d = _dt.datetime.fromtimestamp(t0_ms / 1000, _dt.timezone.utc).date()
-        d = max(d, today - _dt.timedelta(days=MAX_PAST_DAYS))
-        t0_ms = max(t0_ms, _utc_ms(d))
-        last = _dt.datetime.fromtimestamp(t1_ms / 1000, _dt.timezone.utc).date()
-        while d <= last:
-            if d < today and rest_from is None:
-                try:
-                    t, p, q, s = self.day(d)
-                    k = (t >= t0_ms) & (t <= t1_ms)
-                    out.append((t[k], p[k], q[k], s[k]))
-                    covered = min(covered, max(t0_ms, _utc_ms(d)))
-                except Exception:  # yesterday's file appears a few hours after midnight: REST covers it
-                    rest_from = max(t0_ms, _utc_ms(d))
-            elif rest_from is None:
-                rest_from = max(t0_ms, _utc_ms(d))
-            d += _dt.timedelta(days=1)
-        if rest_from is not None:
-            self.ensure(rest_from)
-            with self.lock:
-                r = [x for x in self.rest if rest_from <= x[1] <= t1_ms]
-                first = self.rest[0][1] if self.rest else t1_ms
-            if r:
-                a = np.array(r)
-                out.append((a[:, 1].astype("int64"), a[:, 2], a[:, 3], a[:, 4].astype("int8")))
-            covered = max(rest_from, first) if not any(len(o[0]) for o in out[:-1]) else min(covered, max(rest_from, first))
-        if not out:
-            return (np.array([], "int64"), np.array([]), np.array([]), np.array([], "int8")), t1_ms
-        return tuple(np.concatenate([o[i] for o in out]) for i in range(4)), covered
-
-
-_stores = {}
-
-
-def _store(sym):
-    with _lock:
-        if sym not in _stores:
-            _stores[sym] = _TradeStore(sym)
-        return _stores[sym]
+# ---------------- Step 3: footprint from every trade (2026-11-12, loader rebuilt 2026-11-15) ----------------
+# Real symbols: every Binance futures aggregated trade (exact aggressor side), loaded by orderflow_trades.py
+# (daily files for past days, REST for recent hours, newest first, saved to disk by the hour).
+# A minute whose trades are not all loaded yet is filled from Binance's 1-minute candle (its real taker buy and sell
+# totals, spread evenly over that minute's high-low) and the candle is flagged "est"; the chart dims it and swaps in
+# the real trades as they arrive. Estimated symbols: the chart's own 1-minute candles (coarse; labelled).
+import sys as _sys, os as _os
+import orderflow_trades as _ot
+MAX_PAST_DAYS = _ot.MAX_PAST_DAYS
 
 
 def nice_step(x):
@@ -444,10 +362,11 @@ def nice_step(x):
     return 10 * e
 
 
-def footprint(ticker, tf, start_s, end_s, source="auto", history=None, row_size=0.0, chart_bars=None):
+def footprint(ticker, tf, start_s, end_s, source="auto", history=None, row_size=0.0, chart_bars=None, fill=True):
     """Buy and sell volume at each price row inside every chart candle in [start_s, end_s], on the CHART's prices.
-    chart_bars: [(t_s, high, low)] of those candles (auto row size). Returns (candles, info).
-    Each candle: t (open, UTC s), r0 (lowest row number; row price = r * row_size), buy[], sell[] from low to high."""
+    chart_bars: [(t_s, high, low)] of those candles (auto row size). fill: estimate minutes not loaded yet.
+    Each candle: t (open, UTC s), r0 (lowest row number; row price = r * row_size), buy[], sell[] from low to high,
+    est (true when some of its minutes are estimated)."""
     import numpy as np
     src = pick_source(ticker, source)
     if src is None:
@@ -459,57 +378,65 @@ def footprint(ticker, tf, start_s, end_s, source="auto", history=None, row_size=
     if row_size <= 0:  # auto: about 7 rows in a typical candle (TradingView's auto uses a share of ATR, similar size)
         rng = sorted(h - l for _, h, l in (chart_bars or []) if h > l)
         row_size = nice_step(rng[len(rng) // 2] / 7) if rng else 1.0
-    chart = _rows("estimated", ticker, "M1", start_s, end_s + sec - 60, history)
-    candles, covered = {}, start_s * 1000
     bucket = (lambda x: x - x % sec) if tf != "D1" else (lambda x: x - x % 86400)
+    candles, est, pending, cov = {}, set(), False, []
+
+    def spread(bt, lo, hi, buy, sell):
+        r0, r1 = int(np.floor(lo / row_size + 1e-9)), int(np.floor(hi / row_size + 1e-9))
+        n = r1 - r0 + 1
+        c = candles.setdefault(bt, {})
+        for r in range(r0, r1 + 1):
+            x = c.setdefault(r, [0.0, 0.0]); x[0] += buy / n; x[1] += sell / n
+
     if src == "real":
-        (t, p, q, s), covered = _store(real_symbol(ticker)).trades(start_s * 1000, (end_s + sec) * 1000 - 1)
+        real1m = _rows("real", ticker, "M1", start_s, end_s + sec - 60, history)
+        g_at = _shift(real1m, _rows("estimated", ticker, tf, start_s - 30 * sec, end_s, history), sec, 60)
+        (t, p, q, s), cov, pending = _ot.store(real_symbol(ticker)).trades(start_s * 1000, (end_s + sec) * 1000 - 1)
+        live = time.time() * 1000 - 3 * _ot.POLL_S * 1000      # loaded up to "now": the forming minute counts as whole
+        full = {m for m in real1m if any(a <= m * 1000 and (b >= m * 1000 + 59_999 or b >= live) for a, b in cov)}
         if len(t):
-            real1m = _rows("real", ticker, "M1", start_s, end_s + sec - 60, history)
-            gaps, shift = [], {}
-            for m in sorted(real1m):
-                if m in chart:
-                    gaps.append(chart[m][5] - real1m[m][5]); gaps = gaps[-30:]
-                if gaps:
-                    shift[m] = sorted(gaps)[len(gaps) // 2]
-            known = sorted(shift)
             mins = (t // 60000) * 60
-            if known:
-                pos = np.clip(np.searchsorted(np.array(known), mins, side="right") - 1, 0, len(known) - 1)
-                g = np.array([shift[k] for k in known])[pos]
-            else:
-                g = np.zeros(len(t))
+            k = np.isin(mins, np.fromiter(full, "int64", len(full)))     # only minutes holding every trade
+            t, p, q, s, mins = t[k], p[k], q[k], s[k], mins[k]
+        if len(t):
+            gk = np.array(sorted(g_at), "int64")
+            gv = np.array([g_at[x] for x in gk]) if len(gk) else np.zeros(1)
+            g = gv[np.clip(np.searchsorted(gk, mins, side="right") - 1, 0, len(gv) - 1)] if len(gk) else np.zeros(len(t))
             row = np.floor((p + g) / row_size + 1e-9).astype("int64")
             bt = bucket((t // 1000).astype("int64"))
+            base = int(row.min())
             for side, col in ((1, 0), (-1, 1)):
-                k = s == side
-                key = bt[k] * 100_000_000 + (row[k] - row.min())
+                kk = s == side
+                key = bt[kk] * 100_000_000 + (row[kk] - base)
                 u, inv = np.unique(key, return_inverse=True)
-                vol = np.bincount(inv, weights=q[k])
-                base = int(row.min())
-                for kk, v in zip(u.tolist(), vol.tolist()):
-                    c = candles.setdefault(kk // 100_000_000, {})
-                    c.setdefault(kk % 100_000_000 + base, [0.0, 0.0])[col] += v
+                vol = np.bincount(inv, weights=q[kk])
+                for kx, v in zip(u.tolist(), vol.tolist()):
+                    c = candles.setdefault(kx // 100_000_000, {})
+                    c.setdefault(kx % 100_000_000 + base, [0.0, 0.0])[col] += v
+        if fill:
+            for m, v in real1m.items():
+                if m in full or not start_s <= bucket(m) <= end_s:
+                    continue
+                gg = g_at.get(m, 0.0)
+                spread(bucket(m), v[4] + gg, v[3] + gg, v[0], v[1])
+                est.add(bucket(m))
     else:
+        chart = _need_volume(_rows("estimated", ticker, "M1", start_s, end_s + sec - 60, history))
         for m, v in chart.items():
-            buy, sell, _, h, l, _c = v
-            bt = bucket(m)
-            if not start_s <= bt <= end_s:
-                continue
-            c = candles.setdefault(bt, {})
-            r0, r1 = int(np.floor(l / row_size + 1e-9)), int(np.floor(h / row_size + 1e-9))
-            n = r1 - r0 + 1
-            for r in range(r0, r1 + 1):
-                x = c.setdefault(r, [0.0, 0.0]); x[0] += buy / n; x[1] += sell / n
+            if start_s <= bucket(m) <= end_s:
+                spread(bucket(m), v[4], v[3], v[0], v[1])
     out = []
     for bt in sorted(candles):
         rows = candles[bt]
         lo, hi = min(rows), max(rows)
         out.append({"t": int(bt), "r0": lo, "buy": [round(rows.get(r, (0, 0))[0], 4) for r in range(lo, hi + 1)],
-                    "sell": [round(rows.get(r, (0, 0))[1], 4) for r in range(lo, hi + 1)]})
+                    "sell": [round(rows.get(r, (0, 0))[1], 4) for r in range(lo, hi + 1)], "est": bt in est})
+    first_cov = min((a for a, b in cov if b >= start_s * 1000), default=(end_s + sec) * 1000)
     info = {"source": src, "real_symbol": real_symbol(ticker), "row_size": row_size,
             "unit": "base volume (coin / oz)" if src == "real" else "feed volume (MT5 = ticks)",
-            "covered_from": int(covered // 1000),
-            "method": "every Binance futures trade, shifted onto the chart price minute by minute" if src == "real"
-                      else "chart 1-minute candles spread over their range (coarse estimate)"}
+            "covered_from": int(max(first_cov, start_s * 1000) // 1000), "pending": bool(pending and est),
+            "est_candles": len(est),
+            "method": "every Binance futures trade, shifted onto the chart price" +
+                      ("; candles marked est use Binance 1-minute buy/sell totals until their trades load" if est else "")
+                      if src == "real" else "chart 1-minute candles spread over their range (coarse estimate)"}
     return out, info

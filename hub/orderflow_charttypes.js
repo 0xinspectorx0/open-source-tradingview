@@ -34,20 +34,24 @@
       { kind: "row", label: "Buy / Sell", controls: [{ kind: "color", key: "buyColor", label: "Buy", defval: T.up || "#26a69a" }, { kind: "color", key: "sellColor", label: "Sell", defval: T.down || "#ef5350" }] },
       { kind: "heading", label: "Data" },
       { kind: "select", key: "source", label: "Data", options: Object.keys(SRC), defval: "Auto" },
+      { kind: "toggle", key: "fill", label: "Estimate candles whose trades are still loading (dimmed)", defval: true },
     ],
   };
   const fpDefaults = {}; fpSettings.rows.forEach((r) => { if (r.key) fpDefaults[r.key] = r.defval; if (r.number) fpDefaults[r.number.key] = r.number.defval; (r.colors || []).forEach((c) => (fpDefaults[c.key] = c.defval)); (r.controls || []).forEach((c) => c.key && (fpDefaults[c.key] = c.defval)); });
 
   class FootprintEngine {
     start(host) { this.h = host; this.map = new Map(); this.s = this.s || { ...fpDefaults }; this.busy = false; this.stopped = false; this.live = 0; this.loaded = false; this.push(); this.loadVisible(); }
-    url(a, b) { const t = ticker(this.h), s = this.s; return `/api/orderflow/footprint?symbol=${encodeURIComponent(t)}&tf=${TF[this.h.timeframe] || "M5"}&feed=${feedOf(t)}&from=${a}&to=${b}&source=${SRC[s.source] || "auto"}&row_size=${s.rowMode === "Manual" ? s.rowSize : (this.row || 0)}`; }
+    url(a, b) { const t = ticker(this.h), s = this.s; return `/api/orderflow/footprint?symbol=${encodeURIComponent(t)}&tf=${TF[this.h.timeframe] || "M5"}&feed=${feedOf(t)}&from=${a}&to=${b}&source=${SRC[s.source] || "auto"}&row_size=${s.rowMode === "Manual" ? s.rowSize : (this.row || 0)}&fill=${s.fill === false ? 0 : 1}`; }
     async fetch(a, b) {
       if (this.busy || this.stopped) { this.again = [a, b]; return; }
       this.busy = true;
       try {
         const r = await fetch(this.url(a, b)); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
         if (!this.row && this.s.rowMode !== "Manual") this.row = j.row_size;  // keep one auto row size per chart (stable rows)
-        this.info = j; this.err = null; for (const c of j.candles) this.map.set(c.t * 1000, c);
+        this.info = j; this.err = null;
+        // a full reload drops candles the server no longer estimates (fill switched off); real ones replace estimates
+        if (a <= this.firstAsked) { for (const k of [...this.map.keys()]) if (k >= a * 1000 && k <= b * 1000) this.map.delete(k); this.pending = !!j.pending; }
+        for (const c of j.candles) this.map.set(c.t * 1000, c);
         this.covered = j.covered_from;
       } catch (e) { this.err = String(e.message || e); }
       this.busy = false; this.push();
@@ -58,22 +62,23 @@
       const sec = TF_SEC[TF[this.h.timeframe] || "M5"], n = bars.length;
       const r = this.range || { from: bars[Math.max(0, n - 120)].time, to: bars[n - 1].time };
       const a = Math.floor(Math.max(r.from, bars[Math.max(0, n - 400)].time) / 1000), b = Math.floor(Math.min(r.to, bars[n - 1].time) / 1000);
-      this.loaded = true; this.fetch(a - (a % sec), b);
+      this.loaded = true; this.firstAsked = a - (a % sec); this.fetch(a - (a % sec), b);
     }
-    push() { if (!this.stopped) this.h.pushData({ candles: this.map, row: this.info ? this.info.row_size : this.row, info: this.info, err: this.err, settings: this.s, sec: TF_SEC[TF[this.h.timeframe] || "M5"] }); }
+    push() { if (!this.stopped) this.h.pushData({ pending: this.pending, candles: this.map, row: this.info ? this.info.row_size : this.row, info: this.info, err: this.err, settings: this.s, sec: TF_SEC[TF[this.h.timeframe] || "M5"] }); }
     onViewport(r) { this.range = r; clearTimeout(this.vt); this.vt = setTimeout(() => this.loadVisible(), 400); }
     onBars() {
       const bars = this.h.bars(); if (!bars.length) return;
       if (!this.loaded && !this.busy) { this.loadVisible(); return; }   // style picked before the candles arrived
-      const now = Date.now(), cov = this.covered && this.info && this.info.source === "real" ? this.covered : null;
-      // live: re-read the last two candles every 3 s; while today's trades are still filling, re-read the view every 15 s
+      const now = Date.now();
+      // live: re-read the last two candles every 3 s; while trades are still loading (server says pending), re-read
+      // the view every 5 s so estimated candles turn real as soon as their trades arrive
       if (now - this.live > 3000) { this.live = now; const sec = TF_SEC[TF[this.h.timeframe] || "M5"]; const b = Math.floor(bars[bars.length - 1].time / 1000); this.fetch(b - sec, b); }
-      if (cov && now - (this.fill || 0) > 15000) { const first = this.range ? this.range.from / 1000 : 0; if (cov > first) { this.fill = now; this.loadVisible(); } }
+      if (this.pending && now - (this.fillAt || 0) > 5000) { this.fillAt = now; this.loadVisible(); }
     }
     onSettings(v) {
       const old = this.s || fpDefaults; this.s = { ...fpDefaults, ...v };
       if (!this.h) return;
-      if (old.source !== this.s.source || old.rowMode !== this.s.rowMode || old.rowSize !== this.s.rowSize) { this.map = new Map(); this.row = 0; this.loadVisible(); } else this.push();
+      if (old.source !== this.s.source || old.fill !== this.s.fill || old.rowMode !== this.s.rowMode || old.rowSize !== this.s.rowSize) { this.map = new Map(); this.row = 0; this.loadVisible(); } else this.push();
     }
     suspend() { this.stopped = true; } resume() { this.stopped = false; this.loadVisible(); } stop() { this.stopped = true; this.map = new Map(); }
   }

@@ -945,7 +945,7 @@ class LabHandler(SimpleHTTPRequestHandler):
                 n = min(1000, max(5, (b - a) // sec + 5))
                 cb = [(x["time"], x["high"], x["low"]) for x in hist(sym, tf, n, b * 1000) if a <= x["time"] <= b]
                 rows, info = orderflow_api.footprint(sym, tf, a, b, q.get("source", "auto"), history=hist,
-                                                     row_size=float(q.get("row_size", 0)), chart_bars=cb)
+                                                     row_size=float(q.get("row_size", 0)), chart_bars=cb, fill=q.get("fill", "1") != "0")
                 return self._json({"candles": rows, **info}, 200)
             except Exception as e:
                 logbus.ev("server", "warn", f"orderflow footprint {q.get('symbol')} {q.get('tf')}: {e}", every=30)

@@ -22,10 +22,12 @@
     const pitch = Math.abs(C.logicalToX(1) - C.logicalToX(0)), row = d.row || 1;
     const half = B(pitch * 0.46), gap = B(Math.max(1.5, pitch * 0.05));
     const buyC = s.buyColor, sellC = s.sellColor, pocC = s.pocColor, txt = (a.theme && a.theme.textColor) || "#d1d4dc";
-    const bars = a.bars, W = canvas.width, zones = [];
+    const bars = a.bars, W = canvas.width, zones = []; let estN = 0;
     g.textAlign = "center"; g.textBaseline = "middle";
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i], c = d.candles.get(bar.time); if (!c) continue;
+      if (c.est) estN++;
+      g.globalAlpha = c.est ? 0.4 : 1;   // estimated (trades still loading): dimmed until the real trades replace it
       const x = B(C.timeToX(bar.time)); if (x < -half || x > W + half) continue;
       const n = c.buy.length, tot = c.buy.map((b, k) => b + c.sell[k]);
       const maxT = Math.max(...tot, 1e-9), maxS = Math.max(...c.buy, ...c.sell, 1e-9);
@@ -70,6 +72,7 @@
         g.fillStyle = txt; g.fillText("Σ " + fmt(all), x, y0 + fz * 1.9);
       }
     }
+    g.globalAlpha = 1;
     // Stacked imbalance zones: extend right until a later candle trades through the zone's middle (TradingView's projection).
     for (const z of zones) {
       const mid = (z.lo + z.hi) / 2; let j = z.i + 1;
@@ -78,9 +81,11 @@
       g.fillStyle = rgba(z.col, 0.09); g.fillRect(x0, Y(z.hi), Math.max(0, x1 - x0), Y(z.lo) - Y(z.hi));
     }
     // Source tag, bottom left (after the Vela logo): always say real or estimated, and how far back today's trades are loaded.
-    const i = d.info; g.textAlign = "left";  // left: the canvas runs under the price axis, which hid the right end g.font = `${B(11)}px system-ui, sans-serif`; g.fillStyle = rgba(txt, 0.7);
+    // left-aligned: the canvas runs under the price axis, which hid the right end
+    const i = d.info; g.textAlign = "left"; g.font = `${B(11)}px system-ui, sans-serif`; g.fillStyle = rgba(txt, 0.7);
     const tag = d.err && !i ? "Footprint: no data (" + d.err.slice(0, 50) + ")" : !i ? "Footprint loading..." :
-      i.source === "real" ? `Footprint · REAL trades · Binance ${i.real_symbol} · row ${i.row_size}` : `Footprint · ESTIMATED (coarse) · row ${i.row_size}`;
+      i.source === "real" ? `Footprint · REAL trades · Binance ${i.real_symbol} · row ${i.row_size}` +
+        (estN ? ` · ${estN} dimmed candle${estN > 1 ? "s" : ""} estimated from 1-min buy/sell` + (d.pending ? ", real trades loading..." : " (older than the trade files kept)") : "") : `Footprint · ESTIMATED (coarse) · row ${i.row_size}`;
     g.fillText(tag, B(96), B(C.priceToY(a.scale.min, a.scale, a.bounds)) - B(10));
   }
 
