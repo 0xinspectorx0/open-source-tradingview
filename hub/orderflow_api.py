@@ -318,6 +318,10 @@ def profile(ticker, tf, start_s, end_s, source="auto", history=None, mode="sessi
 # aggTrades list, filled newest-first by one background thread per symbol at a gentle pace (rate-limit safe).
 # Estimated symbols: the chart's own 1-minute candles spread over their high-low range (coarse; labelled).
 import sys as _sys, os as _os, datetime as _dt
+# Daily trade files are big (BTCUSDT ~30 MB zipped per day, gold ~8 MB). Footprints use at most this many past days,
+# plus today; older candles show no footprint (covered_from tells the chart). Stops a 1h/1D footprint from
+# downloading weeks of files (2026-11-15).
+MAX_PAST_DAYS = 2
 REST_CALLS_PER_MIN = 40          # aggTrades weight 20 each: 800 of the 2400 Binance allows per minute
 MAX_TODAY_HOURS = 24
 
@@ -389,6 +393,8 @@ class _TradeStore:
         out, covered, rest_from = [], t1_ms, None
         today = _dt.datetime.now(_dt.timezone.utc).date()
         d = _dt.datetime.fromtimestamp(t0_ms / 1000, _dt.timezone.utc).date()
+        d = max(d, today - _dt.timedelta(days=MAX_PAST_DAYS))
+        t0_ms = max(t0_ms, _utc_ms(d))
         last = _dt.datetime.fromtimestamp(t1_ms / 1000, _dt.timezone.utc).date()
         while d <= last:
             if d < today and rest_from is None:
