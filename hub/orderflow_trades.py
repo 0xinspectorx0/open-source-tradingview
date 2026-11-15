@@ -182,9 +182,9 @@ class TradeStore:
                     out.append(s)
             self.segs = out
 
-    def _rest(self, **kw):
+    def _rest(self, low=True, **kw):
         q = "&".join(f"{k}={v}" for k, v in kw.items())
-        rows = WEIGHT.get(f"{FAPI}/aggTrades?symbol={self.sym}&limit=1000" + ("&" + q if q else ""), 20, low=True)
+        rows = WEIGHT.get(f"{FAPI}/aggTrades?symbol={self.sym}&limit=1000" + ("&" + q if q else ""), 20, low=low)
         return _arr(rows) if rows else None
 
     def _poll_head(self):
@@ -192,7 +192,8 @@ class TradeStore:
         with self.lock:
             head = self.segs[-1] if self.segs else None
         fresh = head is not None and t_req - head.t1 < 120_000
-        c = self._rest(fromId=head.last + 1) if fresh else self._rest()
+        # live updates go ahead of background loading, so the forming candle never drops back to "estimated"
+        c = self._rest(low=False, fromId=head.last + 1) if fresh else self._rest(low=False)
         if c is None:
             if fresh:
                 with self.lock:
