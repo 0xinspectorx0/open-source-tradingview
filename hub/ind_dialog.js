@@ -107,8 +107,8 @@ async function addRow(r) {
   else if (r.src === "mine") { const m = MINE.find((x) => x.id === r.mineId); if (!m) return; ind = { key: `own:${m.id}:${stamp}`, mineId: m.id, name: m.name, origin: "own", source: m.source, on: true }; }
   else return flash("This script is not available here.", true);
   ind.rowId = r.id; INDS.push(ind); saveInds(); flash("Adding to the chart...");
-  if (st.engine !== "vela" && ind.kind !== "native") flash("Saved. Pine draws on the Vela engine for now; switch the engine to Vela.", true);
-  else pineAdd(ind);
+  if (st.engine !== "vela") flash("Pine draws on the Vela engine: switching to Vela...");
+  pineAdd(ind);  // on another engine this switches to Vela, which then draws every indicator that is on
 }
 // Results land here (via indChanged) and show on the row that added them.
 function rowResult(ind) {
