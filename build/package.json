@@ -1,5 +1,5 @@
 {
-  "name": "chart-hub-build",
+  "name": "tradex-build",
   "private": true,
   "dependencies": {
     "@klinecharts/pro": "^0.1.1",

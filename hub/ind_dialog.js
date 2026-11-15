@@ -1,4 +1,4 @@
-// Chart Hub indicators, part 2: the "Indicators, metrics, and strategies" dialog.
+// TradeX indicators, part 2: the "Indicators, metrics, and strategies" dialog.
 // Left: Personal (Favorites, My scripts, On chart) / Built-in (Vela native). Right: list. Clicking a row adds it to the chart.
 // Your own Pine Script (v1-v6) comes in through the Pine Editor ("My scripts").
 const SECTIONS = [
@@ -115,7 +115,7 @@ function rowResult(ind) {
   if (!ind.rowId) return;
   if (busy[ind.key]) return;
   const conv = ind.convFrom ? ` (converted from Pine v${ind.convFrom})` : "";
-  dlg.rowMsg[ind.rowId] = ind.err ? { text: "Could not draw: " + ind.err, bad: true } : liveIds[ind.key] ? (ind.pending ? { text: "Placed on the chart, but it has not drawn yet: waiting for chart data (is the feed up?)", bad: true } : { text: "Added to the chart" + conv }) : dlg.rowMsg[ind.rowId];
+  dlg.rowMsg[ind.rowId] = ind.err ? { text: "Could not draw: " + ind.err, bad: true } : ind.wait ? { text: "On, but it draws on the Vela engine only: switch the engine to Vela to see it." } : liveIds[ind.key] ? (ind.pending ? { text: "Placed on the chart, but it has not drawn yet: waiting for chart data (is the feed up?)", bad: true } : { text: "Added to the chart" + conv }) : dlg.rowMsg[ind.rowId];
 }
 
 function renderOnChart(L) {

@@ -24,7 +24,7 @@ python hub/server.py
 
 Expected output, within about 15 s:
 ```
-Chart Hub: open http://localhost:8770/hub.html  (data on ws://localhost:8765)
+TradeX: open http://localhost:8770/hub.html  (data on ws://localhost:8765)
 Bybit: <about 3300> charts loaded
 Deriv: <about 40> symbols loaded
 ```

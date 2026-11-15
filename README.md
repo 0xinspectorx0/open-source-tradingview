@@ -1,19 +1,21 @@
-# Open Source TradingView
+# TradeX (The Open Source TradingView)
 
-A free, self-hosted, TradingView-style charting app ("Chart Hub") that runs on your own computer.
+TradeX is a free, self-hosted, TradingView-style charting app that runs on your own computer.
 It puts one interface over several free market-data feeds and three chart engines. It runs Pine Script
 indicators and can also show candles from your own MetaTrader 5 terminal, on this PC or on a VPS.
 
 > Not affiliated with, endorsed by, or connected to TradingView, Inc. "TradingView" is their trademark.
 > This project is an independent open-source tool. It is not financial advice.
 
-![Chart Hub: gold on the free Deriv feed, Vela engine](docs/screenshots/01_hub_vela_gold.png)
+![TradeX: gold on the free Deriv feed, Vela engine](docs/screenshots/01_hub_vela_gold.png)
 
-| Four synced charts (Bybit BTC) | Indicators dialog |
+| Four synced charts + favourite drawing tools | Indicators dialog |
 |---|---|
 | ![4 chart layout](docs/screenshots/02_four_chart_layout.png) | ![Indicators](docs/screenshots/03_indicators_dialog.png) |
 | **KLineChart engine** | **Themes, fonts and candle colours** |
 | ![KLineChart](docs/screenshots/04_klinechart_engine.png) | ![Settings](docs/screenshots/06_settings_themes.png) |
+| **Order flow: session volume profile (real Binance trades)** | **Floating favourite-tools bar** |
+| ![Order flow](docs/screenshots/07_order_flow_profile.png) | ![Favourites bar](docs/screenshots/08_favourites_bar.png) |
 
 ## What it does
 
@@ -25,8 +27,16 @@ indicators and can also show candles from your own MetaTrader 5 terminal, on thi
     (`bridge/mt5_bridge.py`). The bridge only reads candles. It never places orders.
 - **The broker switch keeps the instrument.** Gold stays gold when you move from Deriv to Bybit to MT5.
   Only exact matches are joined, so gold tokens such as PAXG are kept separate from gold spot.
-- **Three chart engines, one switch:** Vela (main engine, with Pine Script, 70+ native indicators, 75 drawing
-  tools and layouts of up to 16 synced charts), Lightweight Charts with 86 drawing tools, and KLineChart Pro.
+- **Three chart engines, one switch:** Vela (main engine, with Pine Script, 79 native indicators, 79 drawing
+  tools and layouts of up to 8 synced charts), Lightweight Charts with 86 drawing tools, and KLineChart Pro.
+- **Deep history:** Vela loads 10,000 candles per chart (more in chart settings > Advanced), and fills any gap
+  left by sleep or a reconnect before the next live candle.
+- **Favourite drawing tools:** star a tool in the drawing toolbar and it appears on a small floating bar over the
+  chart, like TradingView. Drag the bar by its grip, double-click the grip to turn it vertical. Stars and position
+  are remembered.
+- **Order flow (Vela chart types):** volume footprint, session volume profile and TPO, plus a delta indicator.
+  Crypto and gold use real Binance futures trades with the buyer/seller side; other symbols get a labelled
+  estimate from the chart's own candles. Deriv candles have no volume, so use Bybit, Binance or MT5 for order flow.
 - **Pine Script:** write or import your own scripts in the Pine Editor. Scripts written for v1 to v4 are
   converted to v5 automatically and the original is kept. Converted values are not verified
   against any reference yet, so check them before you rely on them.
@@ -81,7 +91,8 @@ licenses/   third-party licence and notice files
 
 - Price and Pine alerts (built privately, not yet ported to run without a server)
 - Accuracy tests: candles against the broker, Pine values against reference values
-- Pine Script on the Lightweight and KLineChart engines
+- Pine Script on the Lightweight and KLineChart engines (today an indicator stays on and draws when you switch
+  back to Vela; adding one while on another engine switches to Vela)
 - Drawings that carry across engines
 
 ## Licence

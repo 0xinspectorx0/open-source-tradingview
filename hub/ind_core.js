@@ -1,10 +1,12 @@
-// Chart Hub indicators, part 1: state, chart messaging, add/remove, re-apply on engine load.
+// TradeX indicators, part 1: state, chart messaging, add/remove, re-apply on engine load.
 // Loaded by hub.html before its inline script; uses hub globals ($, st, openPanel) only at call time.
 let INDS = []; try { INDS = JSON.parse(localStorage.getItem("chartHubIndicators") || "[]"); } catch (_) {}   // on the chart (any origin)
 let FAVS = []; try { FAVS = JSON.parse(localStorage.getItem("chartHubFavs") || "[]"); } catch (_) {}         // starred rows
 let MINE = []; try { MINE = JSON.parse(localStorage.getItem("chartHubScripts") || "[]"); } catch (_) {}      // own Pine scripts
 const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
 const saveInds = () => keep("chartHubIndicators", INDS);
+// Before 2026-11-15 a visit to the Lightweight or KLineChart engine switched every Pine indicator off with this error. Turn them back on.
+INDS.forEach((x) => { if (x.err && /run on Vela for now|Vela only/i.test(x.err)) { x.err = null; x.on = true; } });
 INDS.forEach((x) => { if (x.err && /Unsupported Pine Script version|version 4 not supported/i.test(x.err)) { x.err = null; x.on = true; } });  // old v4 failures: the converter handles them now
 let liveIds = {}, busy = {}, reapply = false;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -27,9 +29,19 @@ function prepared(ind) {
   if (!window.PineConvert) return ind.source;
   const c = PineConvert.convert(ind.source);
   ind.convFrom = c.changed && !c.compatOnly ? c.from : null; ind.notes = c.warnings || [];
-  return c.source;
+  // TradingView-style "Style" settings (colour, thickness, show) for every plot line: pine_style.js, 2026-11-13
+  return window.PineStyle ? PineStyle.addStyleInputs(c.source) : c.source;
 }
-async function pineAdd(ind) {
+// Pine and Vela-native indicators draw only on the Vela engine. On another engine an indicator stays on and waits
+// (auto = reload after an engine switch); a user who adds one there is taken to Vela, where it draws.
+async function pineAdd(ind, auto) {
+  if (typeof st !== "undefined" && st.engine !== "vela") {
+    if (auto) { ind.wait = true; indChanged(); return; }
+    ind.wait = false; ind.on = true; saveInds();
+    st.engine = "vela"; save(); paint(); loadEngine();   // the fresh Vela page re-adds every indicator that is on
+    return;
+  }
+  ind.wait = false;
   busy[ind.key] = true; indChanged();
   if (ind.kind === "native") { const r = await ask("native:add", { type: ind.type, inputs: ind.inputs }); onPineResult({ key: ind.key, ...r }); return; }
   const w = frameWin(); if (!w) return;
@@ -59,7 +71,7 @@ function onInputs(m) {
   const key = Object.keys(liveIds).find((k) => liveIds[k] === m.id), ind = key && INDS.find((x) => x.key === key); if (!ind) return;
   ind.inputs = m.inputs; ind.props = m.props; saveInds();
 }
-function reapplyAll() { liveIds = {}; INDS.filter((x) => x.on).forEach(pineAdd); }
+function reapplyAll() { liveIds = {}; INDS.filter((x) => x.on).forEach((x) => pineAdd(x, true)); }
 function removeInd(ind) { pineRemove(ind); INDS = INDS.filter((y) => y !== ind); saveInds(); indChanged(); }
 function toggleInd(ind, on) { ind.on = on; ind.err = null; if (on) pineAdd(ind); else pineRemove(ind); saveInds(); indChanged(); }
 // One hook every view listens to (dialog list, Pine editor status).

@@ -1,12 +1,12 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Lab 2 - KLineChart Pro</title>
+<html><head><meta charset="utf-8"><title>TradeX - KLineChart Pro engine</title>
 <link rel="stylesheet" href="vendor/klinecharts-pro.css">
 <style>
   html,body{margin:0;height:100%;background:#0f161d;color:#d6dee5;font:13px system-ui,Segoe UI,sans-serif}
   #top{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #26333f;height:31px;box-sizing:border-box}
   #top button{background:#16212b;color:#d6dee5;border:1px solid #2b3946;padding:3px 8px;cursor:pointer}
   #chart{position:absolute;top:31px;left:0;right:0;bottom:0}
-  /* Chart Hub theme (theme.js sets the --vars) */
+  /* TradeX theme (theme.js sets the --vars) */
   .klinecharts-pro[data-theme=dark], .klinecharts-pro[data-theme=light] {
     --klinecharts-pro-primary-color: var(--accent); --klinecharts-pro-background-color: var(--bg);
     --klinecharts-pro-popover-background-color: var(--panel); --klinecharts-pro-hover-background-color: var(--raised);
@@ -15,7 +15,7 @@
   }
   #chart.klinecharts-pro { font-family: var(--font); height: auto !important }  /* its CSS fixes 80vh; top/bottom stretch it instead */
 </style></head><body>
-<div id="top"><b>KLineChart Pro 0.1.1 (core 9.8.12)</b><button id="auto">Code trendline</button></div>
+<div id="top"><b>TradeX</b> <span style="color:#93a2af">KLineChart engine</span><button id="auto">Code trendline</button></div>
 <div id="chart"></div>
 <script src="vendor/klinecharts.min.js"></script>
 <script src="vendor/klinecharts-pro.umd.js"></script>
@@ -38,7 +38,9 @@ const datafeed = {
   async searchSymbols(q) { q = (q || "").toUpperCase(); return SYMBOLS.filter((s) => s.ticker.includes(q)); },
   async getHistoryKLineData(symbol, period, from, to) {
     const bars = await LabFeed.history(symbol.ticker, tfOf(period), to);
-    const out = bars.filter((b) => b.time * 1000 >= from && b.time * 1000 <= to).map(toK);
+    // No lower cut at "from": KLineChart asks for the last 500 periods, which is empty on a closed market (weekend), and it
+    // pages back from the oldest candle it gets, so older candles are fine (2026-11-15, Deriv gold showed a blank chart).
+    const out = bars.filter((b) => b.time * 1000 <= to).map(toK);
     if (symbol.ticker !== lastTicker || !lastBars.length || out.length && out[out.length - 1].timestamp >= lastBars[lastBars.length - 1].timestamp) { lastBars = out; lastTicker = symbol.ticker; }
     return out;
   },

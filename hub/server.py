@@ -1,4 +1,4 @@
-"""Chart Lab live data server.
+"""TradeX live data server.
 
 Serves the test pages on http://localhost:8770 and streams candles over
 ws://localhost:8765. Every chart connects to the same stream, so a chart
@@ -557,10 +557,39 @@ DERIV_GRAN = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14
 DERIV_GROUP = {"forex": "forex", "commodities": "commodity", "cryptocurrency": "crypto", "indices": "indices"}
 deriv_symbols_cache = []
 
+# Opening a Deriv connection costs about 1.5 s, more than the request itself, and Deriv returns at most 1,000 candles
+# per reply, so a deep chart needs about 10 requests. Reuse open connections (a small pool) instead of one per request:
+# a 10,000-candle gold chart went from about 30 s to under 10 s (2026-11-15).
+_deriv_pool, _deriv_pool_lock, _deriv_req_id = [], threading.Lock(), [0]
+
 def deriv_request(req):
     from websockets.sync.client import connect
-    with connect(DERIV_URL, open_timeout=10) as c:
-        c.send(json.dumps(req)); return json.loads(c.recv(timeout=20))
+    with _deriv_pool_lock:
+        c = _deriv_pool.pop() if _deriv_pool else None
+        _deriv_req_id[0] += 1; rid = _deriv_req_id[0]
+    for attempt in (1, 2):
+        try:
+            if c is None:
+                c = connect(DERIV_URL, open_timeout=10).__enter__()  # kept open for reuse (pool)
+            c.send(json.dumps({**req, "req_id": rid}))
+            while True:
+                r = json.loads(c.recv(timeout=20))
+                if r.get("req_id") in (rid, None):
+                    break
+            with _deriv_pool_lock:
+                if len(_deriv_pool) < 6:
+                    _deriv_pool.append(c); c = None
+            if c is not None:
+                c.close()
+            return r
+        except Exception:
+            try:
+                c and c.close()
+            except Exception:
+                pass
+            c = None
+            if attempt == 2:
+                raise
 
 def deriv_load_symbols():
     global deriv_symbols_cache
@@ -588,14 +617,36 @@ def deriv_symbols_loop():
     while not deriv_load_symbols():
         time.sleep(60)
 
-def deriv_history(symbol, tf, limit=HISTORY, to_ms=None):
-    req = {"ticks_history": symbol, "style": "candles", "granularity": DERIV_GRAN[tf], "count": min(int(limit), 5000),
-           "end": str(int(int(to_ms) / 1000)) if to_ms else "latest", "adjust_start_time": 1}
-    r = deriv_request(req)
+def _deriv_bars(r):
     if r.get("error"):
         raise RuntimeError(r["error"].get("message"))
     return [{"time": int(c["epoch"]), "open": float(c["open"]), "high": float(c["high"]), "low": float(c["low"]),
              "close": float(c["close"]), "volume": 0.0} for c in r.get("candles") or []]
+
+def deriv_history(symbol, tf, limit=HISTORY, to_ms=None):
+    limit, g = int(limit), DERIV_GRAN[tf]
+    if limit <= 1000:
+        return _deriv_bars(deriv_request({"ticks_history": symbol, "style": "candles", "granularity": g, "count": limit,
+                                          "end": str(int(int(to_ms) / 1000)) if to_ms else "latest", "adjust_start_time": 1}))
+    # Deriv answers at most 1,000 candles per request. For a deep chart, ask for back-to-back time windows of 1,000
+    # candles in parallel (5 at a time) instead of one after another: 10,000 gold candles in ~3 s, not ~20 s (2026-11-15).
+    # Closed-market windows (weekends) come back empty; keep stepping back until enough candles or 4 empty batches.
+    from concurrent.futures import ThreadPoolExecutor
+    end = int(int(to_ms) / 1000) if to_ms else int(time.time())
+    end -= end % g
+    span, got, empty = 1000 * g, {}, 0
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        while len(got) < limit and empty < 4:
+            n = max(1, min(10, -(-(limit - len(got)) // 1000)))
+            wins = [(end - (k + 1) * span + g, end - k * span) for k in range(n)]
+            reqs = [{"ticks_history": symbol, "style": "candles", "granularity": g, "start": a, "end": b, "count": 1000} for a, b in wins]
+            before = len(got)
+            for bars in pool.map(lambda q: _deriv_bars(deriv_request(q)), reqs):
+                for x in bars:
+                    got[x["time"]] = x
+            empty = empty + 1 if len(got) == before else 0
+            end -= n * span
+    return [got[t] for t in sorted(got)][-limit:]
 
 async def stream_deriv(ws, symbol, tf):
     try:
@@ -730,7 +781,7 @@ def mt5_history(symbol, tf, limit=HISTORY, to_ms=None):
     return [{"time": int(r["time"]), "open": float(r["open"]), "high": float(r["high"]), "low": float(r["low"]),
              "close": float(r["close"]), "volume": float(r["tick_volume"])} for r in rates]
 
-# ---------------- Instrument map (Chart Hub: switch broker, stay on the same instrument) ----------------
+# ---------------- Instrument map (TradeX: switch broker, stay on the same instrument) ----------------
 # One instrument = the same underlying market at several brokers. Only exact matches are joined:
 # gold tokens (PAXG, XAUT) are NOT gold spot, so they stay separate instruments.
 BROKERS = [("deriv", "Deriv"), ("bybit", "Bybit"), ("binance", "Binance")] + ([("arm", "Remote MT5")] if REMOTE_ON else []) + ([("mt5", "Local MT5")] if LOCAL_MT5 else [])
@@ -810,7 +861,7 @@ def build_instruments():
 _status_cache = {"at": 0, "data": None}
 
 def feed_status():
-    """Small, cached (5 s) health of each broker feed for the Chart Hub status lights."""
+    """Small, cached (5 s) health of each broker feed for the TradeX status lights."""
     if time.time() - _status_cache["at"] < 5:
         return _status_cache["data"]
     data = {"deriv": {"ok": bool(deriv_symbols_cache), "msg": f"{len(deriv_symbols_cache)} symbols"},
@@ -867,6 +918,55 @@ class LabHandler(SimpleHTTPRequestHandler):
             return self._json(build_instruments(), 200)
         if self.path.startswith("/api/health"):
             return self._json(health_report(), 200)
+        if self.path.startswith("/api/orderflow/delta"):
+            # Delta per candle for any chart symbol (orderflow_api.py; real Binance data or estimated from the feed).
+            import orderflow_api
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            try:
+                src = q.get("feed") or "binance"
+                hist = {"mt5": mt5_history, "deriv": deriv_history, "arm": arm_history, "bybit": bybit_history}.get(src, binance_history)
+                now = int(time.time())
+                rows, info = orderflow_api.delta(q.get("symbol", "frxXAUUSD"), q.get("tf", "M5"), int(q.get("from", now - 86400)),
+                                                 int(q.get("to", now)), q.get("source", "auto"), history=hist)
+                return self._json({"rows": rows, **info}, 200)
+            except Exception as e:
+                logbus.ev("server", "warn", f"orderflow delta {q.get('symbol')} {q.get('tf')}: {e}", every=30)
+                return self._json({"error": f"{e.__class__.__name__}: {e}"}, 502)
+        if self.path.startswith("/api/orderflow/footprint"):
+            # Footprint: buy and sell at each price row inside every candle (real trades or estimate), on the chart's prices.
+            import orderflow_api
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            try:
+                src = q.get("feed") or "binance"
+                hist = {"mt5": mt5_history, "deriv": deriv_history, "arm": arm_history, "bybit": bybit_history}.get(src, binance_history)
+                now = int(time.time()); tf = q.get("tf", "M5"); sym = q.get("symbol", "frxXAUUSD")
+                a, b = int(q.get("from", now - 3 * 3600)), int(q.get("to", now))
+                sec = orderflow_api.TF_SEC[tf]
+                n = min(1000, max(5, (b - a) // sec + 5))
+                cb = [(x["time"], x["high"], x["low"]) for x in hist(sym, tf, n, b * 1000) if a <= x["time"] <= b]
+                rows, info = orderflow_api.footprint(sym, tf, a, b, q.get("source", "auto"), history=hist,
+                                                     row_size=float(q.get("row_size", 0)), chart_bars=cb)
+                return self._json({"candles": rows, **info}, 200)
+            except Exception as e:
+                logbus.ev("server", "warn", f"orderflow footprint {q.get('symbol')} {q.get('tf')}: {e}", every=30)
+                return self._json({"error": f"{e.__class__.__name__}: {e}"}, 502)
+        if self.path.startswith("/api/orderflow/profile"):
+            # Session volume profile (buy/sell by price, POC, value area, developing levels) on the chart's own prices.
+            import orderflow_api
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            try:
+                src = q.get("feed") or "binance"
+                hist = {"mt5": mt5_history, "deriv": deriv_history, "arm": arm_history, "bybit": bybit_history}.get(src, binance_history)
+                now = int(time.time())
+                sess, info = orderflow_api.profile(q.get("symbol", "frxXAUUSD"), q.get("tf", "M5"), int(q.get("from", now - 86400)),
+                                                   int(q.get("to", now)), q.get("source", "auto"), history=hist,
+                                                   mode=q.get("mode", "sessions"), rows=int(q.get("rows", 24)),
+                                                   row_size=float(q.get("row_size", 0)), va_pct=float(q.get("va", 70)) / 100,
+                                                   developing=q.get("developing", "1") == "1")
+                return self._json({"sessions": sess, **info}, 200)
+            except Exception as e:
+                logbus.ev("server", "warn", f"orderflow profile {q.get('symbol')} {q.get('tf')}: {e}", every=30)
+                return self._json({"error": f"{e.__class__.__name__}: {e}"}, 502)
         if not self.path.startswith("/api/bars"):
             if not static_allowed(self.path):
                 return self._json({"error": "not found"}, 404)
@@ -961,7 +1061,7 @@ async def main():
     threading.Thread(target=deriv_symbols_loop, daemon=True).start()
     threading.Thread(target=bybit_symbols_loop, daemon=True).start()
     feedlog.start(FEED_HEALTH, ARM_PORT if REMOTE_ON else None, feed_status)
-    print(f"Chart Hub: open http://localhost:{HTTP_PORT}/hub.html  (data on ws://localhost:{WS_PORT})", flush=True)
+    print(f"TradeX: open http://localhost:{HTTP_PORT}/hub.html  (data on ws://localhost:{WS_PORT})", flush=True)
     async with websockets.serve(handler, "127.0.0.1", WS_PORT, max_size=None):
         await asyncio.Future()
 

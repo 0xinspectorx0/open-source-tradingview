@@ -1,12 +1,17 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Lab 3 - LuxAlgo Vela</title>
+<html><head><meta charset="utf-8"><title>TradeX - Vela engine</title>
 <style>
   html,body{margin:0;height:100%;background:#0f161d;color:#d6dee5;font:13px system-ui,Segoe UI,sans-serif}
   #top{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #26333f;height:31px;box-sizing:border-box}
   #top button,#top select{background:#16212b;color:#d6dee5;border:1px solid #2b3946;padding:3px 8px;cursor:pointer}
   #chart{position:absolute;top:31px;left:0;right:0;bottom:0}
+  /* Vela 0.9.3 bug (found 2026-11-12, also on the pre-change page): once the mouse moves over an open toolbar menu, the
+     chart canvas paints above the menu layer and takes the click, so no menu entry (chart style, etc.) can be picked.
+     Keep the menu layer above the chart; the layer itself lets clicks through where it has no menu. */
+  .vela-ui-layer { z-index: 30; pointer-events: none; }
+  .vela-ui-layer > * { pointer-events: auto; }
 </style></head><body>
-<div id="top"><b>LuxAlgo Vela 0.9.3 (workspace)</b>
+<div id="top"><b>TradeX</b> <span style="color:#93a2af">Vela engine</span>
   <select id="layout"><option value="">1 chart</option><option value="2h">2 side by side</option><option value="2v">2 stacked</option><option value="4">4 charts</option><option value="8">8 charts</option></select>
   <span style="color:#93a2af">Tips: type a letter for symbol search, a digit for timeframe, ? for all shortcuts. Drag pane borders to resize.</span>
   <button id="auto">Code trendline</button></div>
@@ -14,6 +19,13 @@
 <script src="vela.bundle.js"></script>
 <script src="theme.js"></script>
 <script src="lab.js"></script>
+<script src="orderflow_delta.js"></script>
+<script src="orderflow_profile.js"></script>
+<script src="orderflow_charttypes.js"></script>
+<script src="orderflow_footprint_draw.js"></script>
+<script src="orderflow_svp_type.js"></script>
+<script src="orderflow_tpo_type.js"></script>
+<script src="drawing_favbar.js"></script>
 <script>
 let lastBars = [];
 const provider = {
@@ -22,18 +34,47 @@ const provider = {
   },
   async getBars(ticker, timeframe, range = {}) {
     const tf = LabTF.fromAny(timeframe);
-    const bars = await LabFeed.history(ticker, tf, range.to, range.limit || 1000);
-    let out = bars.map((b) => ({ ...b, time: b.time * 1000 }));
+    const want = range.limit || 1000;
+    // Feeds cap one reply (remote MT5 5000, Bybit/Binance 1000). Vela treats a short reply as "no older history exists",
+    // so page backwards here until we have what Vela asked for, or the feed runs out (2026-11-13).
+    let out = [], to = range.to;
+    for (let page = 0; page < 40 && out.length < want; page++) {
+      const got = (await LabFeed.history(ticker, tf, to, want - out.length)).map((b) => ({ ...b, time: b.time * 1000 }));
+      const older = out.length ? got.filter((b) => b.time < out[0].time) : got;
+      if (!older.length) break;
+      out = older.concat(out);
+      if (range.from && out[0].time <= range.from) break;
+      to = out[0].time - 1;
+    }
     if (range.from) out = out.filter((b) => b.time >= range.from);
     if (!range.to) { lastBars = out; setTimeout(applyTheme, 400); }  // the volume indicator mounts with the data: colour it then
     return out;
   },
   subscribe(ticker, timeframe, onBar) {
-    return LabFeed.live(ticker, LabTF.fromAny(timeframe), (b) => {
-      const bar = { ...b, time: b.time * 1000 };
+    const tf = LabTF.fromAny(timeframe), step = LabTF.sec[tf] * 1000;
+    let chain = Promise.resolve();
+    const push = (bar) => {
       const last = lastBars[lastBars.length - 1];
+      if (last && bar.time < last.time) return;
       if (last && last.time === bar.time) lastBars[lastBars.length - 1] = bar; else lastBars.push(bar);
       onBar(bar);
+    };
+    return LabFeed.live(ticker, tf, (b) => {
+      const bar = { ...b, time: b.time * 1000 };
+      chain = chain.then(async () => {
+        // A live candle far after our last one means candles are missing (laptop slept, feed reconnected, or the
+        // first load came from a stale cache). Vela does not fill such a hole by itself: fetch the missing candles
+        // first, so the chart and every indicator stay continuous (2026-11-13).
+        const last = lastBars[lastBars.length - 1];
+        if (last && bar.time - last.time > 2 * step) {
+          try {
+            const n = Math.min(5000, Math.ceil((bar.time - last.time) / step) + 5);
+            const fill = await LabFeed.history(ticker, tf, undefined, n);
+            for (const f of fill) { const t = f.time * 1000; if (t > last.time && t < bar.time) push({ ...f, time: t }); }
+          } catch (e) { console.warn("gap fill failed", e); }
+        }
+        push(bar);
+      });
     });
   },
 };
@@ -47,13 +88,13 @@ class HubPineEngine extends VelaLab.PineWorkerEngine {
     return super.execute(req, h);
   }
 }
-// Inside the Chart Hub, Vela's own "Indicators" button opens the hub's own Indicators dialog
+// Inside the TradeX, Vela's own "Indicators" button opens the hub's own Indicators dialog
 // (Vela native indicators + your own Pine scripts in one place).
 if (LabEmbedded && VelaLab.registerWidgetAction) {
   VelaLab.registerWidgetAction({ id: "indicators", target: "topbar", align: "left", label: "Indicators", icon: "indicators",
     run: () => window.parent.postMessage({ evt: "indicators:open" }, location.origin) });
 }
-// ---- Theme (Chart Hub settings) ----
+// ---- Theme (TradeX settings) ----
 // hexA() comes from theme.js
 function velaTheme() { const t = HubTheme; return { background: t.bg, textColor: t.text, gridColor: t.grid, borderColor: t.line, upColor: t.up, downColor: t.down, fontFamily: t.font }; }
 // Candle colours have one home: the hub's Settings panel. Inside the hub, Vela's own dialog hides its colour rows.
@@ -97,16 +138,21 @@ function build(layout) {
   ws = new VelaLab.VelaWorkspace(host, {
     // "1" (not false) so the layout can change in place later; top-level symbol/timeframe are every cell's default.
     layout: layout || "1", symbol: "lab:" + LabDefaultSymbol, timeframe: VELA_TF[LabDefaultTF], live: true,
+    // History depth. Vela's default is 500 candles and it does NOT load more when you scroll left, so 1m-15m charts
+    // only reached back a few days. More: chart settings > Advanced > Bars to fetch, or the 3M/6M/1Y buttons (2026-11-13).
+    bars: 10000,
     theme: velaTheme(), upColor: HubTheme.up, downColor: HubTheme.down,
     providers: { lab: () => provider }, persist: false,
-    // Inside the Chart Hub wrapper, symbol / timeframe / layout live in the wrapper's bar only (no duplicate controls).
+    // Inside the TradeX wrapper, symbol / timeframe / layout live in the wrapper's bar only (no duplicate controls).
     ...(LabEmbedded ? { topbar: { left: ["style", "indicators", "undo-redo"] } } : {}),
     // Pine Script runs in its own worker per chart (PineTS via @luxalgo/vela-pinets), so heavy scripts never freeze the chart.
     engines: { pine: () => new HubPineEngine() },
   });
+  // Floating favourites bar for starred drawing tools (drawing_favbar.js).
+  try { TradeXFavBar.mount(ws, host); } catch (e) { console.warn("favourites bar", e); }
   // Colour every chart once its first history is in (the volume indicator mounts with the data).
   setTimeout(applyTheme, 1500);
-  // Tell the Chart Hub shell when the symbol or timeframe is changed inside Vela.
+  // Tell the TradeX shell when the symbol or timeframe is changed inside Vela.
   ws.chart.on("market:changed", ({ symbol, timeframe }) => {
     // Remember the current market, so a layout rebuild opens on it (not on the first symbol).
     if (symbol) window.LabDefaultSymbol = String(symbol).replace(/^lab:/, "");
