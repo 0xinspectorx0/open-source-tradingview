@@ -223,14 +223,22 @@ class TradeStore:
         self._add(c, int(c[1][0]) + 1, int(c[1][-1]))
         return True
 
-    def _run(self):
-        last_save = time.time()
+    def _run_head(self):
+        """Own thread: newest trades every POLL_S, never stuck behind background loading."""
         while time.time() - self.last_used < IDLE_STOP_S:
             try:
-                if time.time() - self.last_poll >= POLL_S:
-                    self.last_poll = time.time()
-                    while self._poll_head():
-                        pass
+                self.last_poll = time.time()
+                while self._poll_head():
+                    pass
+            except Exception:
+                time.sleep(2)
+            time.sleep(max(0.2, POLL_S - (time.time() - self.last_poll)))
+
+    def _run(self):
+        last_save = time.time()
+        threading.Thread(target=self._run_head, daemon=True).start()
+        while time.time() - self.last_used < IDLE_STOP_S:
+            try:
                 if not self._back_step():
                     time.sleep(0.5)
                 if time.time() - last_save > 60:
