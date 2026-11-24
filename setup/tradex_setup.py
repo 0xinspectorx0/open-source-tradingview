@@ -200,9 +200,24 @@ def _mt5_skip():
         return "MT5 charts on Mac/Linux are not supported yet; free sources work"
     return None
 
+def _own_mt5_source():
+    """An MT5 already installed on this PC (its program folder), or None. Seen 2026-11-24: when one exists,
+    MetaQuotes' mt5setup.exe ignores /path and UPDATES that installation (and restarts it) instead of making ours.
+    So TradeX then copies only the program files from it and never runs mt5setup."""
+    for p in (_existing_mt5() if IS_WIN else []):
+        d = os.path.dirname(p)
+        if os.path.normcase(os.path.abspath(d)) != os.path.normcase(os.path.abspath(MT5_DIR)):
+            return d
+    return None
+
 def check_mt5_download():
     if _mt5_skip():
         return True, _mt5_skip()
+    if os.path.exists(MT5_EXE):
+        return True, "MetaTrader 5 already in the TradeX folder"
+    src = _own_mt5_source()
+    if src:
+        return True, f"not needed: your MetaTrader 5 is on this PC ({src}); TradeX copies its program files"
     return os.path.exists(MT5_SETUP) and os.path.getsize(MT5_SETUP) > 10e6, "installer downloaded"
 
 def do_mt5_download():
@@ -229,7 +244,23 @@ def check_mt5_install():
     return os.path.exists(MT5_EXE), MT5_EXE
 
 def do_mt5_install():
-    # Official silent install into the TradeX folder. /auto can return before the files are there: wait for them.
+    src = _own_mt5_source()
+    if src:
+        # The person's own MT5 stays untouched: copy only program files (no accounts, settings, robots, charts).
+        os.makedirs(os.path.join(MT5_DIR, "Config"), exist_ok=True)
+        n = 0
+        for f in os.listdir(src):
+            p = os.path.join(src, f)
+            if os.path.isfile(p) and f.lower().endswith((".exe", ".dll", ".ico")) and f.lower() != "uninstall.exe":
+                shutil.copy2(p, os.path.join(MT5_DIR, f)); n += 1
+        if os.path.isdir(os.path.join(src, "Sounds")):
+            shutil.copytree(os.path.join(src, "Sounds"), os.path.join(MT5_DIR, "Sounds"), dirs_exist_ok=True)
+        if os.path.exists(os.path.join(src, "Config", "servers.dat")):
+            shutil.copy2(os.path.join(src, "Config", "servers.dat"), os.path.join(MT5_DIR, "Config", "servers.dat"))
+        if not os.path.exists(MT5_EXE):
+            return False, f"could not copy MetaTrader 5 from {src}", "run setup again"
+        return True, f"copied {n} program files from your MetaTrader 5 ({src}); yours is not changed"
+    # No MT5 on this PC: official silent install into the TradeX folder. /auto can return before the files are there.
     if not os.path.exists(MT5_SETUP):
         return False, "MT5 installer not downloaded yet", "run the mt5_download step first (or run setup again)"
     before = sorted(_appdata_terminals())
@@ -372,7 +403,10 @@ def _login_own():
 def do_mt5_login():
     """Mode demo: setup/mt5_demo.ps1 fills MT5's own 'Open an Account' window with placeholder details (fallback: the
     person fills it). Mode own: login + server + hidden password. Then setup waits until the terminal is logged in."""
-    proc = subprocess.Popen([MT5_EXE, "/portable"], env=env_inside())
+    si = None
+    if IS_WIN:   # start MetaTrader 5 minimized and without taking focus: nothing pops up for the person
+        si = subprocess.STARTUPINFO(); si.dwFlags |= subprocess.STARTF_USESHOWWINDOW; si.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+    proc = subprocess.Popen([MT5_EXE, "/portable"], env=env_inside(), startupinfo=si)
     mode = OPTS["mt5_mode"] or "demo"
     if mode == "own":
         say("MetaTrader 5 is opening. Close its 'Open an Account' window if it shows; TradeX logs in for you.")

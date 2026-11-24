@@ -20,6 +20,7 @@ public class TxWin {
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
   public struct RECT { public int L, T, R, B; }
   public static string Text(IntPtr h) { var s = new StringBuilder(512); GetWindowText(h, s, 512); return s.ToString(); }
   public static IntPtr Dialog(uint pid) { IntPtr r = IntPtr.Zero; EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p);
@@ -42,6 +43,8 @@ function NextEnabled { $c = [TxWin]::Ctl($script:dlg, 12324); return ($c -ne [In
 $t0 = Get-Date; $script:dlg = [IntPtr]::Zero
 while (((Get-Date) - $t0).TotalSeconds -lt $TimeoutSec -and $script:dlg -eq [IntPtr]::Zero) { $script:dlg = [TxWin]::Dialog([uint32]$ProcessId); Start-Sleep -Milliseconds 500 }
 if ($script:dlg -eq [IntPtr]::Zero) { Out $false "window" "MetaTrader 5 did not show its 'Open an Account' window" }
+# Nothing for the person to see or click: move the form off-screen (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)
+[void][TxWin]::SetWindowPos($script:dlg, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0001 -bor 0x0004 -bor 0x0010)
 
 # 1. List of companies: MetaQuotes Ltd. is the first and selected entry -> Next
 if (-not (Wait-Ctl 10729)) { Out $false "companies" "company list not found" }
