@@ -11,20 +11,21 @@
 
   const css = document.createElement("style");
   css.textContent = [
-    "#txauth{flex:none;margin-left:auto;position:sticky;right:0;z-index:2;box-shadow:-14px 0 12px -4px var(--panel,#131416);display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:4px;cursor:pointer;",
-    "background:#e8ecee;color:#0a0a0b;border:1px solid #e8ecee;font:600 12px/24px var(--font,system-ui);white-space:nowrap}",
+    // Own corner at the right of the top bar (outside the scrolling row), so it never covers the bar's buttons.
+    "#bar{padding-right:52px!important}",
+    "#txauth{position:absolute;top:5px;right:8px;z-index:20;display:grid;place-items:center;height:28px;min-width:28px;padding:0 12px;border-radius:14px;cursor:pointer;",
+    "background:#e8ecee;color:#0a0a0b;border:0;font:600 12px var(--font,system-ui);white-space:nowrap}",
     "#txauth:hover{background:#fff}#txauth:active{transform:translateY(1px)}",
-    "#txauth.in{background:transparent;color:#e8ecee;border-color:#2a2d31;font-weight:500}#txauth.in:hover{border-color:#797e86}",
-    "#txauth .av{width:18px;height:18px;border-radius:50%;background:#1c1e21;color:#e8ecee;display:grid;place-items:center;font-size:10px;font-weight:700;overflow:hidden}",
-    "#txauth .av img{width:100%;height:100%;object-fit:cover}",
-    "#txauthm{position:fixed;z-index:100001;width:272px;padding:14px;border-radius:4px;background:#131416;border:1px solid #2a2d31;",
-    "box-shadow:0 18px 48px rgba(0,0,0,.55);color:#b4bcbf;font:12px/1.5 var(--font,system-ui)}",
-    "#txauthm h4{margin:0 0 4px;color:#e8ecee;font-size:14px;font-weight:600}#txauthm p{margin:0 0 12px}",
-    "#txauthm button.pv{display:flex;align-items:center;gap:10px;width:100%;height:36px;margin:0 0 8px;padding:0 12px;border-radius:4px;cursor:pointer;",
-    "background:#1c1e21;color:#e8ecee;border:1px solid #2a2d31;font:500 13px var(--font,system-ui)}",
-    "#txauthm button.pv:hover{border-color:#797e86}#txauthm button.pv:disabled{opacity:.55;cursor:wait}#txauthm button.pv img{width:16px;height:16px}",
-    "#txauthm .em{color:#e8ecee;font-weight:600;word-break:break-all}#txauthm .err{color:#d65b4b;margin:8px 0 0}",
-    "#txauthm .out{background:transparent;justify-content:center}#txauthm .fine{margin:10px 0 0;color:#797e86;font-size:11px}",
+    "#txauth.in{padding:0;width:28px;background:#1c1e21;color:#e8ecee;box-shadow:0 0 0 1px #2a2d31;overflow:hidden;font-size:12px}",
+    "#txauth.in:hover{box-shadow:0 0 0 2px #797e86}#txauth.in img{width:100%;height:100%;object-fit:cover}",
+    "html.txweb-banner #txauth{top:31px}",
+    "#txauthm{position:fixed;z-index:100001;width:280px;border-radius:10px;background:#131416;border:1px solid #2a2d31;box-shadow:0 18px 48px rgba(0,0,0,.55);",
+    "color:#b4bcbf;font:13px/1.5 var(--font,system-ui);overflow:hidden}",
+    "#txauthm .hd{display:flex;gap:12px;align-items:center;padding:16px}#txauthm .big{width:44px;height:44px;border-radius:50%;background:#1c1e21;color:#e8ecee;",
+    "display:grid;place-items:center;font-weight:700;font-size:16px;overflow:hidden;flex:none}#txauthm .big img{width:100%;height:100%;object-fit:cover}",
+    "#txauthm .nm{color:#e8ecee;font-weight:600;font-size:14px}#txauthm .em{color:#797e86;font-size:12px;word-break:break-all}",
+    "#txauthm .row{display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:0;border-top:1px solid #2a2d31;color:#e8ecee;font:13px var(--font,system-ui);cursor:pointer;text-decoration:none}",
+    "#txauthm .row:hover{background:#1c1e21}#txauthm .note{padding:0 16px 14px;color:#797e86;font-size:12px}",
   ].join("");
   document.head.appendChild(css);
 
@@ -37,31 +38,28 @@
     btn.className = u ? "in" : "";
     if (!u) { btn.textContent = "Sign in"; btn.title = "Sign in to keep your layouts on every device"; return; }
     const pic = u.user_metadata && u.user_metadata.avatar_url;
-    btn.innerHTML = `<span class="av">${pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase())}</span><span>${esc(nameOf(u).split(" ")[0].slice(0, 16))}</span>`;
-    btn.title = u.email || "";
+    btn.innerHTML = pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase());
+    btn.title = nameOf(u);
   }
   function closeMenu() { if (menu) { menu.remove(); menu = null; } }
-  function openMenu(err) {
+  function openMenu() {
     closeMenu();
+    const u = A.user; if (!u) { location.href = "web/signin.html"; return; }
+    const pic = u.user_metadata && u.user_metadata.avatar_url;
     menu = document.createElement("div"); menu.id = "txauthm";
-    const u = A.user;
-    menu.innerHTML = u
-      ? `<h4>Signed in</h4><p class="em">${esc(u.email || nameOf(u))}</p><p>Your layouts and indicator templates are saved to this account.</p>
-         <button class="pv out" data-a="out">Sign out</button>`
-      : `<h4>Sign in to TradeX</h4><p>Keep your layouts and indicator templates on every device.</p>
-         ${A.providers.map((p) => { const n = p === "google" ? "Google" : "GitHub"; return `<button class="pv" data-a="${p}" ${busy ? "disabled" : ""}><img src="https://cdn.simpleicons.org/${p}/e8ecee" alt="">${busy === p ? "Opening " + n + "..." : "Continue with " + n}</button>`; }).join("")}
-         <p class="fine">TradeX stores only your account id, email and your saved layouts. No passwords.</p>`;
-    if (err) menu.insertAdjacentHTML("beforeend", `<p class="err">${esc(err)}</p>`);
+    menu.innerHTML = `<div class="hd"><span class="big">${pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase())}</span>
+      <div><div class="nm">${esc(nameOf(u))}</div><div class="em">${esc(u.email || "")}</div></div></div>
+      <div class="note">Your layouts and indicator templates are saved to this account.</div>
+      <button class="row" data-a="settings">Settings and theme</button>
+      <button class="row" data-a="out">Sign out</button>`;
     menu.onclick = async (e) => {
       const b = e.target.closest("button[data-a]"); if (!b) return;
       if (b.dataset.a === "out") { await sb.auth.signOut(); closeMenu(); return; }
-      busy = b.dataset.a; openMenu();
-      const { error } = await sb.auth.signInWithOAuth({ provider: busy, options: { redirectTo: location.origin + "/hub.html" } });
-      if (error) { busy = ""; openMenu("Sign-in could not start: " + error.message); }
+      closeMenu(); const r = document.querySelector('#rail [data-panel="settings"]'); if (r) r.click();
     };
     document.body.appendChild(menu);
     const r = btn.getBoundingClientRect();
-    menu.style.top = r.bottom + 6 + "px"; menu.style.left = Math.max(8, Math.min(r.right - 272, innerWidth - 280)) + "px";
+    menu.style.top = r.bottom + 8 + "px"; menu.style.left = Math.max(8, Math.min(r.right - 280, innerWidth - 288)) + "px";
   }
   document.addEventListener("mousedown", (e) => { if (menu && !menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) closeMenu(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
@@ -112,7 +110,7 @@
     await new Promise((res, rej) => { const s = document.createElement("script"); s.src = SDK; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
     sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
     btn = document.createElement("button"); btn.id = "txauth"; btn.onclick = () => (menu ? closeMenu() : openMenu());
-    const bar = document.getElementById("bar"); if (bar) bar.appendChild(btn);
+    const app = document.getElementById("app"); if (app) app.appendChild(btn);
     sb.auth.onAuthStateChange((ev, session) => {
       const was = A.user && A.user.id; A.user = session ? session.user : null; busy = ""; paint();
       if (A.user && A.user.id !== was) adoptLocal().catch(() => {});
