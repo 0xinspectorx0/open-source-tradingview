@@ -11,7 +11,7 @@
 
   const css = document.createElement("style");
   css.textContent = [
-    "#txauth{flex:none;margin-left:auto;display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:4px;cursor:pointer;",
+    "#txauth{flex:none;margin-left:auto;position:sticky;right:0;z-index:2;box-shadow:-14px 0 12px -4px var(--panel,#131416);display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:4px;cursor:pointer;",
     "background:#e8ecee;color:#0a0a0b;border:1px solid #e8ecee;font:600 12px/24px var(--font,system-ui);white-space:nowrap}",
     "#txauth:hover{background:#fff}#txauth:active{transform:translateY(1px)}",
     "#txauth.in{background:transparent;color:#e8ecee;border-color:#2a2d31;font-weight:500}#txauth.in:hover{border-color:#797e86}",
@@ -49,8 +49,7 @@
       ? `<h4>Signed in</h4><p class="em">${esc(u.email || nameOf(u))}</p><p>Your layouts and indicator templates are saved to this account.</p>
          <button class="pv out" data-a="out">Sign out</button>`
       : `<h4>Sign in to TradeX</h4><p>Keep your layouts and indicator templates on every device.</p>
-         <button class="pv" data-a="google" ${busy ? "disabled" : ""}><img src="https://cdn.simpleicons.org/google/e8ecee" alt="">${busy === "google" ? "Opening Google..." : "Continue with Google"}</button>
-         <button class="pv" data-a="github" ${busy ? "disabled" : ""}><img src="https://cdn.simpleicons.org/github/e8ecee" alt="">${busy === "github" ? "Opening GitHub..." : "Continue with GitHub"}</button>
+         ${A.providers.map((p) => { const n = p === "google" ? "Google" : "GitHub"; return `<button class="pv" data-a="${p}" ${busy ? "disabled" : ""}><img src="https://cdn.simpleicons.org/${p}/e8ecee" alt="">${busy === p ? "Opening " + n + "..." : "Continue with " + n}</button>`; }).join("")}
          <p class="fine">TradeX stores only your account id, email and your saved layouts. No passwords.</p>`;
     if (err) menu.insertAdjacentHTML("beforeend", `<p class="err">${esc(err)}</p>`);
     menu.onclick = async (e) => {
@@ -106,6 +105,10 @@
     let cfg = {};
     try { cfg = await (await fetch("web/auth_config.json", { cache: "no-store" })).json(); } catch (_) {}
     if (!cfg.url || !cfg.anonKey) return;   // login not configured yet: no button
+    // Show only the sign-in methods switched on in Supabase (none on = no button), so turning one on needs no redeploy.
+    try { const st = await (await fetch(cfg.url + "/auth/v1/settings", { headers: { apikey: cfg.anonKey } })).json(); A.providers = ["google", "github"].filter((p) => st.external && st.external[p]); }
+    catch (_) { A.providers = []; }
+    if (!A.providers.length) return;
     await new Promise((res, rej) => { const s = document.createElement("script"); s.src = SDK; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
     sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
     btn = document.createElement("button"); btn.id = "txauth"; btn.onclick = () => (menu ? closeMenu() : openMenu());
