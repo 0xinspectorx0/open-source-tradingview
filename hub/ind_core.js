@@ -4,7 +4,16 @@ let INDS = []; try { INDS = JSON.parse(localStorage.getItem("chartHubIndicators"
 let FAVS = []; try { FAVS = JSON.parse(localStorage.getItem("chartHubFavs") || "[]"); } catch (_) {}         // starred rows
 let MINE = []; try { MINE = JSON.parse(localStorage.getItem("chartHubScripts") || "[]"); } catch (_) {}      // own Pine scripts
 const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
-const saveInds = () => keep("chartHubIndicators", INDS);
+const saveInds = () => { keep("chartHubIndicators", INDS); if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
+// Order-flow views moved to the chart-type menu (Volume footprint, Session volume profile), 2026-11-12. The first version
+// switched two indicators on by itself (Delta pane, SVP indicator); take those auto-added ones off once. Both stay
+// available in Indicators > Vela native for anyone who wants them.
+try {
+  if (!localStorage.getItem("chartHubOrderflowV2")) {
+    INDS = INDS.filter((x) => !/^native:orderflow_(delta|profile):seed$/.test(x.key || ""));
+    localStorage.setItem("chartHubOrderflowV2", "1"); saveInds();
+  }
+} catch (_) {}
 // Before 2026-11-15 a visit to the Lightweight or KLineChart engine switched every Pine indicator off with this error. Turn them back on.
 INDS.forEach((x) => { if (x.err && /run on Vela for now|Vela only/i.test(x.err)) { x.err = null; x.on = true; } });
 INDS.forEach((x) => { if (x.err && /Unsupported Pine Script version|version 4 not supported/i.test(x.err)) { x.err = null; x.on = true; } });  // old v4 failures: the converter handles them now

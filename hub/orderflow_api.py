@@ -16,7 +16,7 @@ Use from Python (agents):
 or over HTTP while the hub server runs:  GET http://localhost:8770/api/orderflow/delta?symbol=RMT_XAUUSD&tf=M5&from=<s>&to=<s>&source=auto
 Each row: t (bar open, UTC seconds), buy, sell, delta, hi, lo (running delta extremes inside the bar, 0 = bar open), n (lower bars used).
 """
-import json, threading, time, urllib.request
+import json, os, threading, time, urllib.request
 
 TF_SEC = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
 # Lower timeframe used inside each chart bar (like TradingView's automatic intrabar timeframe).
@@ -49,7 +49,7 @@ def real_symbol(ticker):
     t = ticker.upper().split(":")[-1]
     # Deriv names: frxXAUUSD (forex/metals), cryETHUSD (crypto). Same Binance market as the other feeds; the price
     # shift lines Binance up with Deriv's own price (2026-11-15: cryETHUSD was missed and showed an all-zero estimate).
-    for p in ("RMT_", "BYBIT_S_", "BYBIT_I_", "BYBIT_", "FRX", "CRY"):
+    for p in (os.environ.get("REMOTE_MT5_PREFIX", "RMT_"), "BYBIT_S_", "BYBIT_I_", "BYBIT_", "FRX", "CRY"):  # remote MT5 ticker prefix = .env setting
         if t.startswith(p):
             t = t[len(p):]
             break

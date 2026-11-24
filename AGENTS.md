@@ -12,7 +12,29 @@ Follow the steps in order, run each check, and report what passed and what did n
   tunnel for remote MT5.
 - Ask the user before installing MetaTrader 5, changing their SSH config, or doing anything on their server.
 
-## 1. Free feeds (always do this first)
+## 0. One-step install (preferred, Windows)
+`setup/install.ps1` does everything into ONE folder (private Python via uv, packages, chart sources, MetaTrader 5 in
+portable mode, Start-menu shortcut). All caches and temp files stay inside that folder.
+```powershell
+powershell -ExecutionPolicy Bypass -File setup\install.ps1 -Dir D:\TradeX        # add -NoMT5 to skip MetaTrader 5
+```
+Every step can also be run and checked on its own (JSON output for agents):
+```bash
+python setup/tradex_setup.py --profile --json     # OS, chip, RAM, free space, MT5 already installed, Light mode
+python setup/tradex_setup.py --list --json        # which steps are done
+setup\repair.cmd --run <step>                     # Windows: re-run one step with the folder's own caches
+```
+Steps: profile, folder, packages, sources, mt5_download, mt5_install, mt5_login, launcher. Ask the user before installing MT5.
+MT5 account (asked once, saved in `data/mt5_choice.json`; agents pass `--mt5-mode demo|own|skip`):
+- `demo` (default, and for agents): `setup/mt5_demo.ps1` fills MT5's own "Open an Account" window with placeholder
+  details (no personal data) and opens a free MetaQuotes-Demo account. If MT5 changes that window, setup falls back to
+  asking the person to finish it.
+- `own`: the person types login number, server and password (best: the read-only INVESTOR password). It needs a
+  keyboard; TradeX never stores the password (MT5 keeps it).
+- `skip`: free exchanges only.
+macOS/Linux: `setup/install.sh` (free sources only; MT5 charts are Windows-only for now).
+
+## 1. Free feeds (manual setup)
 Needs Python 3 (tested on 3.14).
 
 ```bash
@@ -92,7 +114,9 @@ Stop it.
 ## Developing
 - Main files: `hub/server.py` (feeds, instrument map, HTTP and WebSocket), `hub/hub.html` (the shell), `hub/vela.html`,
   `hub/lightweight.html`, `hub/klinechart.html` (engines), `hub/ind_*.js`, `hub/pine_*.js` (indicators and Pine).
-- New feed: add a `<name>_history()` and a `stream_<name>()` in `server.py`, register them in `handler()` and
-  `/api/bars`, add the symbols to `/api/symbols` and `build_instruments()`, and add one entry to `BROKERS`.
+- New chart source: add ONE plugin file `hub/feeds/<id>.py` (contract at the top of `hub/feeds/__init__.py`:
+  `MANIFEST`, `symbols()`, `history()`, `selftest()`, optional `stream()`; see `okx.py`). Prefix its tickers
+  (`OKX_`, `CB_` ...) so they are unique. Nothing in `server.py` needs to change. On/off: `data/sources.json`
+  (read at start), list: `GET /api/sources`. Deriv, Bybit, Binance and MT5 are still built into `server.py`.
 - Rebuilding `hub/vela.bundle.js`: see THIRD_PARTY_NOTICES.md. The project is AGPL-3.0. Keep the licence and
   notices, and keep the Vela attribution mark visible.

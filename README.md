@@ -44,7 +44,48 @@ indicators and can also show candles from your own MetaTrader 5 terminal, on thi
 - **Safe by default:** binds to `127.0.0.1` only and serves only a whitelist of static files. With nothing
   configured, it never opens an SSH link.
 
-## Quick start
+## Architecture
+
+How TradeX fits together: the one-line installer pulls the newest version from this repo, the chart app in your
+browser talks only to the TradeX server on your own computer, and the server fetches candles from the exchanges and
+(optionally) your MetaTrader 5. Your data, `.env` and `private/` never leave your computer.
+
+![TradeX architecture](docs/architecture/tradex-architecture.png)
+
+Interactive version (zoom, follow a route, light/dark): download
+[`docs/architecture/tradex-architecture.html`](docs/architecture/tradex-architecture.html) and open it in a browser.
+Source of the diagram: [`docs/architecture/tradex-architecture.json`](docs/architecture/tradex-architecture.json).
+
+## Install in one line
+
+No Python, no admin rights and no account needed. Everything goes into one folder (`D:\TradeX` when drive D: has
+room, else your user folder; `~/TradeX` on macOS/Linux).
+
+**Windows** (PowerShell):
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/saifullahshafin/open-source-tradingview/releases/latest/download/install.ps1 | iex"
+```
+**macOS / Linux** (Terminal):
+```sh
+curl -LsSf https://github.com/saifullahshafin/open-source-tradingview/releases/latest/download/install.sh | sh
+```
+Then start **TradeX** from the Start menu (Windows) or run `~/TradeX/tradex.sh`. Your browser opens the charts.
+
+**Update:** run the same line again. It downloads the newest TradeX and keeps your layouts, settings and data.
+
+| What if... | TradeX does |
+|---|---|
+| you have no Python | the installer brings its own (via uv), inside the TradeX folder |
+| you have never used MetaTrader 5 | choose "Create a free demo account for me": TradeX opens one by itself (nothing to type) |
+| you have an MT5 account | choose "I have an MT5 account" and type login number, server and password (best: the read-only investor password; never saved by TradeX) |
+| you do not want MetaTrader 5 | choose "Skip"; the free exchanges still work |
+| you already have MetaTrader 5 installed | TradeX installs its own portable copy in its folder and leaves yours alone |
+| an exchange is blocked in your country | setup tests each exchange and switches on only the ones that answer |
+| port 8770 is taken | TradeX says so at start; set `HUB_HTTP_PORT` in `.env` |
+| the internet drops halfway | run the line again; it continues from the step that failed |
+| you are on macOS or Linux | all free exchanges work; MetaTrader 5 charts are Windows-only for now |
+
+## Quick start (manual, for developers)
 
 Requirements: Python 3 (tested on 3.14). Node.js is not needed to run it; the built bundle is included.
 

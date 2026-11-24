@@ -15,6 +15,17 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+# made by the installer (setup/): user data, private Python + caches, portable MetaTrader 5, launcher
+/data/
+hub/user_data/
+hub/pine_cache/
+hub/arm_symbols_cache.json
+hub/arm_nodata.json
+/private/
+/runtime/
+/mt5/
+/TradeX.cmd
+/tradex.sh
 
 # build
 build/node_modules/

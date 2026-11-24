@@ -16,6 +16,8 @@
   <span style="color:#93a2af">Tips: type a letter for symbol search, a digit for timeframe, ? for all shortcuts. Drag pane borders to resize.</span>
   <button id="auto">Code trendline</button></div>
 <div id="chart"></div>
+<style>
+</style>
 <script src="vela.bundle.js"></script>
 <script src="theme.js"></script>
 <script src="lab.js"></script>
@@ -29,26 +31,39 @@
 <script src="orderflow_autofit.js"></script>
 <script>
 let lastBars = [];
+// Tickers drawn by the hub's + Compare (indicator keys "cmp:<ticker>:<stamp>" in the hub's saved indicator list).
+function compareTickers() {
+  try { return new Set(JSON.parse(localStorage.getItem("chartHubIndicators") || "[]").filter((x) => x.origin === "compare" && x.on !== false).map((x) => String(x.key).split(":")[1])); }
+  catch (_) { return new Set(); }
+}
 const provider = {
   async listSymbols() {
     return LabSymbols.map((s) => ({ ticker: s.ticker, description: s.name, type: /crypto|bybit-(perp|spot|futures|inverse|mark|index)/.test(s.group) ? "crypto" : /forex/.test(s.group) ? "forex" : s.group === "arm-stock" ? "stock" : /index|indices/.test(s.group) ? "index" : "commodity" }));
   },
   async getBars(ticker, timeframe, range = {}) {
     const tf = LabTF.fromAny(timeframe);
-    const want = range.limit || 1000;
+    // + Compare (2026-11-24): Pine request.security asks for the compared symbol's history plus 30 extra days
+    // (about 53,000 one-minute candles), paged over the feed. The line only needs the main chart's span, so a
+    // compared symbol gets at most the main chart's candle count + 500.
+    const isCmp = compareTickers().has(String(ticker).replace(/^lab:/, ""));
+    const want = isCmp ? Math.min(range.limit || 100000, Math.max(lastBars.length, 1000) + 500) : (range.limit || 1000);
     // Feeds cap one reply (remote MT5 5000, Bybit/Binance 1000). Vela treats a short reply as "no older history exists",
     // so page backwards here until we have what Vela asked for, or the feed runs out (2026-11-13).
     let out = [], to = range.to;
     for (let page = 0; page < 40 && out.length < want; page++) {
-      const got = (await LabFeed.history(ticker, tf, to, want - out.length)).map((b) => ({ ...b, time: b.time * 1000 }));
+      // one page at most 3000 bars: the MT5 bridge refuses longer date ranges (D1 x 10000 = "invalid datetime
+      // range" = empty daily chart, 2026-11-18). An older page failing keeps the bars already loaded.
+      let got;
+      try { got = (await LabFeed.history(ticker, tf, to, Math.min(want - out.length, 3000))).map((b) => ({ ...b, time: b.time * 1000 })); }
+      catch (e) { if (out.length) break; throw e; }
       const older = out.length ? got.filter((b) => b.time < out[0].time) : got;
       if (!older.length) break;
       out = older.concat(out);
       if (range.from && out[0].time <= range.from) break;
       to = out[0].time - 1;
     }
-    if (range.from) out = out.filter((b) => b.time >= range.from);
-    if (!range.to) { lastBars = out; setTimeout(applyTheme, 400); }  // the volume indicator mounts with the data: colour it then
+    if (range.from && !isCmp) out = out.filter((b) => b.time >= range.from);
+    if (!range.to && !isCmp) { lastBars = out; setTimeout(applyTheme, 400); }  // the volume indicator mounts with the data: colour it then
     return out;
   },
   subscribe(ticker, timeframe, onBar) {
@@ -89,8 +104,8 @@ class HubPineEngine extends VelaLab.PineWorkerEngine {
     return super.execute(req, h);
   }
 }
-// Inside the TradeX, Vela's own "Indicators" button opens the hub's own Indicators dialog
-// (Vela native indicators + your own Pine scripts in one place).
+// Inside the TradeX, Vela's own "Indicators" button opens the hub's single TradingView-style dialog
+// (Vela built-ins + TradingView built-ins + community + own Pine in one place).
 if (LabEmbedded && VelaLab.registerWidgetAction) {
   VelaLab.registerWidgetAction({ id: "indicators", target: "topbar", align: "left", label: "Indicators", icon: "indicators",
     run: () => window.parent.postMessage({ evt: "indicators:open" }, location.origin) });
@@ -168,7 +183,100 @@ function build(layout) {
   try { ws.chart.on("script:run", (ev) => { if (ev && ev.id) window.lastRuns[ev.id] = { plots: ev.plots || {}, bar: ev.bar, warnings: (ev.warnings || []).length, at: Date.now() }; }); } catch (_) {}
   try { ws.chart.on("indicator:removed", (ev) => { if (LabEmbedded && ev && ev.id) window.parent.postMessage({ evt: "ind:removed", id: ev.id }, location.origin); }); } catch (_) {}
   ws.chart.on("market:changed", ({ symbol, timeframe }) => LabNotify(String(symbol || "").replace(/^lab:/, ""), LabTF.fromAny(timeframe || "1")));
+  // TradeX layouts (2026-11-23): drawings belong to a SYMBOL (TradingView rule), every change wakes the hub's autosave.
+  hookCells();
+  try { ws.on("cell:created", () => setTimeout(hookCells, 0)); } catch (_) {}
+  try { ws.on("state:changed", () => { if (LabEmbedded) window.parent.postMessage({ evt: "doc:dirty" }, location.origin); }); } catch (_) {}
 }
+// ---- TradeX layouts: drawings per symbol + the layout document (2026-11-23, layouts.js in the hub) ----
+// Vela keeps drawings per chart CELL; a gold line must not stay on the chart after switching to EURUSD.
+const drawBook = {};                       // symbol -> drawings document
+const cellSym = new WeakMap(), hookedCharts = new WeakSet();
+const EMPTY_DRAWINGS = { version: 1, drawings: [] };
+const bareSym = (s) => String(s || "").replace(/^lab:/, "");
+function cellsList() { try { return ws.cells ? ws.cells() : [ws.active]; } catch (_) { return [ws.active]; } }
+function cellSymbol(chart) {
+  try { const i = cellsList().findIndex((c) => c && c.chart === chart); const cs = ws.getState().charts[i]; if (cs && cs.symbol) return bareSym(cs.symbol); } catch (_) {}
+  return LabDefaultSymbol;
+}
+function swapDrawings(chart, sym) {
+  const old = cellSym.get(chart);
+  if (!sym || old === sym) return;
+  try { if (old) drawBook[old] = chart.drawings.toJSON(); chart.drawings.fromJSON(drawBook[sym] || EMPTY_DRAWINGS); } catch (e) { console.warn("drawings swap", e); }
+  cellSym.set(chart, sym);
+}
+function hookCells() {
+  cellsList().forEach((c) => {
+    if (!c || !c.chart || hookedCharts.has(c.chart)) return;
+    hookedCharts.add(c.chart); cellSym.set(c.chart, cellSymbol(c.chart));
+    try { c.chart.on("market:changed", ({ symbol }) => swapDrawings(c.chart, bareSym(symbol))); } catch (_) {}
+    // A right mouse-down clears the selection for a moment before the menu opens: keep the last line for 2 s.
+    try { c.chart.on("drawing:selected", (ev) => { if (selDrawing) lastSel = { ...selDrawing, at: Date.now() }; selDrawing = ev && ev.id ? { chart: c.chart, id: ev.id } : null; alertChip(); }); } catch (_) {}
+  });
+}
+// ---- Alerts from the chart (2026-11-23): right-click a price / a drawing, or the chip on a selected line ----
+const ALERT_DRAWINGS = { hline: "Horizontal line", hray: "Horizontal ray", crossline: "Cross line", trendline: "Trend line", infoline: "Info line",
+  trendangle: "Trend angle", arrow: "Arrow", ray: "Ray", extendedline: "Extended line" };
+let selDrawing = null;
+let lastSel = null;
+function selectedAlertable() {
+  const sel = selDrawing || (lastSel && Date.now() - lastSel.at < 2000 ? lastSel : null);
+  if (!sel) return null;
+  try { const d = sel.chart.drawings.all().find((x) => x.id === sel.id); if (d && ALERT_DRAWINGS[d.type]) { selDrawing = selDrawing || sel; return d; } return null; } catch (_) { return null; }
+}
+function drawingInfo(d) {
+  const j = (() => { try { return selDrawing.chart.drawings.toJSON().drawings.find((x) => x.id === d.id); } catch (_) { return null; } })() || d;
+  return { id: j.id, type: j.type, label: ALERT_DRAWINGS[j.type], anchors: (j.anchors || []).map((a) => ({ time: a.time, price: a.price })) };
+}
+let ALERTS_ON = false;   // set from /api/status: true only when an alert engine is connected (private extension)
+fetch("/api/status").then((r) => r.json()).then((j) => { ALERTS_ON = !!j.alerts; }).catch(() => {});
+function askAlert(extra) { if (LabEmbedded) window.parent.postMessage({ evt: "alert:new", ...extra }, location.origin); }
+function alertChip() {
+  let chip = document.getElementById("alertChip");
+  const d = selectedAlertable();
+  if (!d || !LabEmbedded || !ALERTS_ON) { if (chip) chip.hidden = true; return; }
+  if (!chip) {
+    chip = document.createElement("button"); chip.id = "alertChip"; chip.type = "button";
+    chip.style.cssText = "position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:14px;border:1px solid var(--accent,#f5a623);background:rgba(0,0,0,.72);color:#fff;font:12px system-ui,sans-serif;cursor:pointer";
+    chip.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span></span>';
+    chip.onclick = () => { const x = selectedAlertable(); if (x) askAlert({ drawing: drawingInfo(x) }); };
+    document.getElementById("chart").appendChild(chip);
+  }
+  chip.querySelector("span").textContent = "Add alert on this " + ALERT_DRAWINGS[d.type].toLowerCase();
+  chip.hidden = false;
+}
+if (LabEmbedded && VelaLab.registerWidgetAction) {
+  try {
+    VelaLab.registerWidgetAction({ id: "tradex-alert-drawing", target: "context:body", order: -101, label: "Add alert on this drawing", icon: "bell",
+      when: () => ALERTS_ON && !!selectedAlertable(), run: () => { const d = selectedAlertable(); if (d) askAlert({ drawing: drawingInfo(d) }); } });
+    VelaLab.registerWidgetAction({ id: "tradex-alert-here", target: "context:body", order: -100, label: "Add alert here", icon: "bell",
+      when: (ctx) => ALERTS_ON && !!(ctx && ctx.pointer && ctx.pointer.paneKind === "price" && ctx.pointer.price != null),
+      run: (ctx) => askAlert({ price: ctx.pointer.price }) });
+    VelaLab.registerWidgetAction({ id: "tradex-alert-axis", target: "context:price-axis", order: -100, label: "Add alert at this price", icon: "bell",
+      when: (ctx) => ALERTS_ON && !!(ctx && ctx.pointer && ctx.pointer.price != null), run: (ctx) => askAlert({ price: ctx.pointer.price }) });
+  } catch (e) { console.warn("alert menu", e); }
+}
+// The hub owns the indicator list (Pine + native, with inputs), so Vela's own indicator ledger is left out.
+function getDoc() {
+  const vela = ws.getState();
+  (vela.charts || []).forEach((c) => { delete c.indicators; });
+  const book = { ...drawBook };
+  cellsList().forEach((c) => { try { if (c && c.chart) book[cellSym.get(c.chart) || cellSymbol(c.chart)] = c.chart.drawings.toJSON(); } catch (_) {} });
+  for (const k in book) if (!book[k] || !(book[k].drawings || []).length) delete book[k];
+  return { vela, drawBook: book };
+}
+function applyDoc(doc) {
+  try {
+    for (const k in drawBook) delete drawBook[k];
+    Object.assign(drawBook, (doc && doc.drawBook) || {});
+    if (doc && doc.vela) { const v = JSON.parse(JSON.stringify(doc.vela)); (v.charts || []).forEach((c) => { delete c.indicators; delete c.drawings; }); ws.applyState(v); }
+    hookCells();
+    cellsList().forEach((c) => { if (c && c.chart) { const sym = cellSymbol(c.chart); cellSym.set(c.chart, sym); try { c.chart.drawings.fromJSON(drawBook[sym] || EMPTY_DRAWINGS); } catch (e) { console.warn("drawings restore", e); } } });
+    applyTheme();
+    return { ok: true, drawings: Object.values(drawBook).reduce((n, d) => n + ((d && d.drawings) || []).length, 0) };
+  } catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+
 build("");
 document.getElementById("layout").onchange = (e) => build(e.target.value);
 
@@ -220,10 +328,15 @@ window.labChart = {
       return res;
     } catch (e) { return { ok: false, error: String(e.message || e) }; }
   },
-  setMarket: (symbol, tf) => (window.LabDefaultSymbol = symbol, window.LabDefaultTF = tf || LabDefaultTF, ws.chart.setMarket({ symbol: "lab:" + symbol, timeframe: VELA_TF[tf] || "1" })),
+  // 2026-11-24: swap the drawings to the new symbol at once. Vela's own market:changed comes only after the new
+  // candles AND its indicators are done (about 5 s with an EMA on), so the old symbol's lines showed on the new chart
+  // until then. swapDrawings runs once per change, so the later event does nothing.
+  setMarket: (symbol, tf) => (window.LabDefaultSymbol = symbol, window.LabDefaultTF = tf || LabDefaultTF, swapDrawings(ws.chart, symbol), ws.chart.setMarket({ symbol: "lab:" + symbol, timeframe: VELA_TF[tf] || "1" })),
   setTF: (t) => ws.chart.setTimeframe ? ws.chart.setTimeframe({ M1: "1", M5: "5", M15: "15", M30: "30", H1: "60", H4: "240", D1: "1D" }[t]) : null,
   addCodeTrendline,
-  drawingCount: () => { try { return ws.chart.drawings.list().length; } catch (_) { return -1; } },
+  drawingCount: () => { try { return ws.chart.drawings.all().length; } catch (_) { return -1; } },
+  getDoc, applyDoc,
+  drawingsNow: () => { try { return ws.chart.drawings.toJSON().drawings.map((x) => ({ id: x.id, type: x.type, anchors: (x.anchors || []).map((a) => ({ time: a.time, price: a.price })) })); } catch (_) { return []; } },
   barCount: () => lastBars.length,
 };
 </script>

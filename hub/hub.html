@@ -19,16 +19,12 @@
   .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--faint) }
   .dot.ok { background:var(--ok) } .dot.bad { background:var(--bad) }
   select { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:3px; padding:4px 6px; font:inherit }
-  #pick { position:relative; flex:none }
-  #q { width:240px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:3px; padding:5px 8px 5px 26px; font:inherit; font-weight:600;
-       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23958c7e' stroke-width='1.6'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3Cpath d='M9.5 9.5 13 13'/%3E%3C/svg%3E");
-       background-repeat:no-repeat; background-position:8px 50% }
-  #q:focus { outline:none; border-color:var(--accent); font-weight:400 }
-  #list { position:fixed; top:36px; width:440px; max-height:70vh; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:4px; box-shadow:0 10px 30px #000a; z-index:10 }
-  #list div { display:flex; gap:10px; align-items:baseline; padding:6px 10px; cursor:pointer }
-  #list div:hover, #list div.hi { background:var(--raised) }
-  #list b { min-width:84px; font-family:var(--mono); font-weight:600 } #list span { color:var(--dim); overflow:hidden; text-overflow:ellipsis; flex:1 }
-  #list i { font-style:normal; font-size:11px; color:var(--accent); font-family:var(--mono) }
+  #symBtn { flex:none; display:flex; align-items:center; gap:8px; max-width:300px; background:transparent; color:var(--text); border:1px solid transparent; border-radius:4px; padding:4px 9px 4px 7px; font:inherit; cursor:pointer }
+  #symBtn:hover { background:var(--raised); border-color:var(--line) } #symBtn svg { flex:none; color:var(--dim) }
+  #cmpBtn { flex:none; width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:4px; cursor:pointer; padding:0 }
+  #cmpBtn:hover { background:var(--raised); border-color:var(--line); color:var(--text) }
+  #symKey { font-weight:700; font-size:14px; letter-spacing:.01em } #symName { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  @media (max-width:760px) { #symName { display:none } }
   #ticker { color:var(--dim); font:12px var(--mono) }
   #stage { position:relative; grid-row:2; grid-column:1; min-width:0 }
   #frame { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:var(--bg) }
@@ -115,6 +111,42 @@
   .dlg-row.chart .sub { grid-column:2 / 4; max-width:none; white-space:normal }
   .dlg-row .acts { grid-column:3; grid-row:1; display:flex; gap:6px }
   .dlg-empty { padding:14px 12px; color:var(--dim); font-size:12px; line-height:1.5 }
+  /* Symbol Search (TradingView layout: search, category tabs, source filter, ranked rows) */
+  #symDlg { position:fixed; inset:0; z-index:50; background:#0008; display:flex; align-items:flex-start; justify-content:center; padding-top:min(9vh, 80px) }
+  #symDlg[hidden] { display:none }
+  .dlg.sy { width:min(820px, 94vw); height:min(660px, calc(100vh - 2 * min(9vh, 80px))) }
+  .sy-s { position:relative; border-bottom:0; padding-bottom:10px } .sy-s input { padding-right:34px; font-size:15px }
+  .sy-clear { position:absolute; right:28px; top:50%; transform:translateY(-60%); background:none; border:0; color:var(--dim); font-size:20px; cursor:pointer; line-height:1 } .sy-clear:hover { color:var(--text) }
+  .sy-tabs { display:flex; gap:6px; padding:0 20px 10px; overflow-x:auto; scrollbar-width:none; flex:none }
+  .sy-tabs button { flex:none; background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:16px; padding:6px 14px; cursor:pointer; font:inherit; font-size:13px }
+  .sy-tabs button:hover { border-color:var(--dim) } .sy-tabs button.on { background:var(--text); color:var(--bg); border-color:var(--text); font-weight:600 }
+  .sy-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 20px 8px; border-bottom:1px solid var(--line); flex:none }
+  .sy-count { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .sy-src { flex:none }
+  .sy-list { flex:1; overflow:auto; padding:4px 8px 8px; min-height:0 }
+  .sy-gh { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); padding:10px 12px 4px }
+  .sy-row { display:grid; grid-template-columns:30px minmax(84px, 128px) 1fr auto auto; column-gap:12px; align-items:center; padding:7px 12px; border-radius:5px; cursor:pointer; border-bottom:1px solid var(--grid) }
+  .sy-row.hi { background:var(--raised) } .sy-row.cur .sy-sym::after { content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-left:6px; vertical-align:2px }
+  .sy-sym { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .sy-desc { color:var(--dim); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0 }
+  .sy-row mark { background:transparent; color:var(--accent) }
+  .sy-type { color:var(--dim); font-size:11px; text-align:right; white-space:nowrap }
+  .sy-tags { display:flex; gap:3px; justify-content:flex-end }
+  .sy-tag { background:var(--bg); color:var(--dim); border:1px solid var(--line); border-radius:3px; padding:2px 5px; font:10px var(--mono); cursor:pointer }
+  .sy-tag:hover { color:var(--text); border-color:var(--dim) } .sy-tag.on { color:var(--accentInk); background:var(--accent); border-color:var(--accent) }
+  .sy-logo { position:relative; width:26px; height:26px; display:block } .sy-logo.two { width:30px }
+  .sy-coin { position:absolute; left:0; top:0; width:26px; height:26px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:700; font-size:12px; line-height:1; box-shadow:0 0 0 1px #0002 inset }
+  .sy-coin.sm { font-size:9px; letter-spacing:-.02em } .sy-coin.sq { border-radius:6px }
+  .sy-logo.two .sy-coin { width:19px; height:19px; font-size:10px } .sy-logo.two .a { left:0; top:0; z-index:1; box-shadow:0 0 0 2px var(--panel) } .sy-logo.two .b { left:11px; top:9px; box-sizing:border-box; padding:5px 0 0 4px; font-size:9px; letter-spacing:-.03em }
+  .sy-row.hi .sy-logo.two .a { box-shadow:0 0 0 2px var(--raised) }
+  .sy-more { text-align:center; color:var(--faint); font-size:11px; padding:10px }
+  .sy-foot { display:flex; justify-content:space-between; gap:10px; padding:9px 20px; border-top:1px solid var(--line); color:var(--faint); font-size:11px; flex:none }
+  .sy-foot kbd { font:10px var(--mono); border:1px solid var(--line); border-radius:3px; padding:1px 4px; color:var(--dim); margin:0 1px }
+  @media (max-width:600px) {
+    #symDlg { padding-top:0 } .dlg.sy { width:100vw; height:100vh; border-radius:0; border:0 }
+    .sy-row { grid-template-columns:30px 1fr auto; grid-template-rows:auto auto; row-gap:2px }
+    .sy-logo { grid-row:1 / 3 } .sy-sym { grid-column:2 } .sy-type { grid-column:3; grid-row:1 } .sy-desc { grid-column:2; grid-row:2 } .sy-tags { grid-column:3; grid-row:2 }
+    .sy-foot span:first-child { display:none } .sy-tabs, .sy-bar { padding-left:14px; padding-right:14px } .dlg.sy .dlg-s { padding-left:14px; padding-right:14px }
+  }
   /* Pine Editor (dock panel) */
   #dock.wide { width:min(560px, 48vw); display:flex; flex-direction:column; overflow:hidden }
   .pe-bar { display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap }
@@ -132,7 +164,7 @@
 <div id="app">
 <div id="bar">
   <span id="brand">TradeX</span><span class="sep"></span>
-  <div id="pick"><input id="q" spellcheck="false" autocomplete="off" placeholder="Search instrument"><div id="list" hidden></div></div>
+  <button id="symBtn" title="Symbol Search (or just start typing on the chart)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg><span id="symKey"></span><span id="symName"></span></button><button id="cmpBtn" title="Compare or add symbol" aria-label="Compare or add symbol"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg></button>
   <div class="seg" id="brokers" title="Broker: same instrument, different price source"></div>
   <select id="variant" title="Market type at this broker" hidden></select>
   <span id="ticker"></span><span class="sep"></span>
@@ -149,7 +181,7 @@
   <button data-panel="feeds" title="Feeds: broker connection status"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14a8 8 0 0 1 12 0M5.5 11.5a4.5 4.5 0 0 1 7 0"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/></svg></button>
   <button data-panel="settings" title="Settings: theme, colours, font" style="margin-top:auto;margin-bottom:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </nav>
-<footer id="status"><span id="lights"></span><button id="restart" title="Restart this chart. For Remote MT5: reconnects the SSH link and, if configured, restarts the bridge. Drawings on the chart are cleared.">Restart chart</button><span id="restartMsg"></span><span id="hud"></span><span id="clock"></span></footer>
+<footer id="status"><span id="lights"></span><button id="restart" title="Restart this chart. For Remote MT5: reconnects the SSH link and, if configured, restarts the bridge. Drawings and indicators come back by themselves.">Restart chart</button><span id="restartMsg"></span><span id="hud"></span><span id="clock"></span></footer>
 </div>
 <script src="pine_convert.js"></script><script src="pine_style.js"></script><script src="ind_core.js"></script><script src="ind_dialog.js"></script><script src="pine_editor.js"></script>
 <script>
@@ -158,9 +190,11 @@
 const ENGINES = [["vela", "Vela"], ["lightweight", "Lightweight"], ["klinechart", "KLineChart"]];
 const TFS = [["M1", "1m"], ["M5", "5m"], ["M15", "15m"], ["M30", "30m"], ["H1", "1H"], ["H4", "4H"], ["D1", "D"]];
 const SHORT = { arm: "RMT", bybit: "BYB", deriv: "DER", mt5: "MT5", binance: "BIN" };
+// The server may send a short name per broker (remote MT5 setting, plugin sources); else the table above.
+const shortOf = (b) => ((DATA && DATA.brokers || []).find((x) => x.id === b) || {}).short || SHORT[b] || b.slice(0, 3).toUpperCase();
 const $ = (id) => document.getElementById(id);
 let DATA = { brokers: [], instruments: [] }, BY_TICKER = new Map(), status = {};
-let st = { engine: "vela", key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD", tf: "M1" };
+let st = { engine: "vela", key: "XAUUSD", broker: "", ticker: "", tf: "M1" };   // first visit: gold on the first feed that has it (remote MT5, else Deriv)
 try { Object.assign(st, JSON.parse(localStorage.getItem("chartHub") || "{}")); } catch (_) {}
 const save = () => { try { localStorage.setItem("chartHub", JSON.stringify(st)); } catch (_) {} };
 const inst = (k) => DATA.instruments.find((i) => i.key === k);
@@ -168,7 +202,10 @@ const inst = (k) => DATA.instruments.find((i) => i.key === k);
 async function init() {
   DATA = await (await fetch("/api/instruments")).json();
   DATA.instruments.forEach((i) => Object.entries(i.brokers).forEach(([b, opts]) => opts.forEach((o) => BY_TICKER.set(o.ticker, { key: i.key, broker: b }))));
-  if (!inst(st.key) || !inst(st.key).brokers[st.broker]) Object.assign(st, { key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD" });
+  if (!inst(st.key) || !inst(st.key).brokers[st.broker]) {  // first visit, or saved market gone (feed off / delisted): gold on the first feed that has it
+    const g = inst("XAUUSD"), b = g && (g.brokers.arm ? "arm" : g.brokers.deriv ? "deriv" : Object.keys(g.brokers)[0]);
+    Object.assign(st, b ? { key: "XAUUSD", broker: b, ticker: g.brokers[b][0].ticker } : { key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD" });
+  }
   ENGINES.forEach(([id, n]) => $("engines").appendChild(btn(n, () => { st.engine = id; save(); paint(); loadEngine(); }, id)));
   TFS.forEach(([id, n]) => $("tfs").appendChild(btn(n, () => { st.tf = id; push(); }, id)));
   DATA.brokers.forEach((b) => { const x = btn("", () => chooseBroker(b.id), b.id); x.innerHTML = `<span class="dot"></span>${b.name}`; $("brokers").appendChild(x); });
@@ -229,7 +266,7 @@ function chooseBroker(b) {
 
 function paint() {
   const i = inst(st.key);
-  if (document.activeElement !== $("q")) $("q").value = i ? `${i.key}  ${i.name}` : st.ticker;
+  $("symKey").textContent = i ? i.key : st.ticker; $("symName").textContent = i ? i.name : "";
   $("engines").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.id === st.engine));
   $("layout").disabled = st.engine !== "vela"; if (st.engine !== "vela") $("layout").value = "";
   $("tfs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.id === st.tf));
@@ -247,44 +284,22 @@ function paint() {
 }
 $("variant").onchange = (e) => { st.ticker = e.target.value; push(); };
 
-// Instrument search
-let hits = [], hi = 0;
-function search() {
-  const q = $("q").value.trim().toUpperCase(), words = q.split(/\s+/).filter(Boolean);
-  hits = DATA.instruments.filter((i) => words.every((w) => i.key.includes(w) || i.name.toUpperCase().includes(w))).slice(0, 150);
-  hi = 0; const L = $("list"); L.innerHTML = "";
-  hits.forEach((i, n) => {
-    const d = document.createElement("div"); if (n === 0) d.className = "hi";
-    d.innerHTML = `<b></b><span></span><i></i>`;
-    d.children[0].textContent = i.key; d.children[1].textContent = i.name;
-    d.children[2].textContent = Object.keys(i.brokers).map((b) => SHORT[b]).join(" ");
-    d.onmousedown = (e) => { e.preventDefault(); pick(i.key); };
-    L.appendChild(d);
-  });
-  const r = $("q").getBoundingClientRect(); L.style.left = r.left + "px"; L.hidden = !hits.length;
-}
-function pick(k) { $("list").hidden = true; $("q").blur(); chooseInstrument(k); }
-$("q").onfocus = () => { $("q").select(); $("q").value = ""; search(); };
-$("q").oninput = search;
-$("q").onblur = () => { $("list").hidden = true; paint(); };
-$("q").onkeydown = (e) => {
-  const rows = $("list").children;
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault(); if (!rows.length) return;
-    rows[hi].className = ""; hi = (hi + (e.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length;
-    rows[hi].className = "hi"; rows[hi].scrollIntoView({ block: "nearest" });
-  } else if (e.key === "Enter" && hits[hi]) pick(hits[hi].key);
-  else if (e.key === "Escape") $("q").blur();
-};
+// Instrument search: the TradingView-style Symbol Search window lives in symbol_search.js.
 
 // The engine reports symbol/timeframe changes made inside it, so the shell stays in step.
 window.addEventListener("message", (e) => {
   if (e.origin !== location.origin || !e.data) return;
   if (e.data.evt === "loaded") {
     if (e.data.symbol !== pending) return;
+    if (e.data.error && /hidden from the list/.test(e.data.error)) {  // no data at this broker: say so once, refresh the list, no retry loop
+      $("coverText").textContent = e.data.error + "."; pending = null; clearTimeout(coverTimer); clearTimeout(coverRetry);
+      fetch("/api/instruments").then((r) => r.json()).then((d) => { DATA = d; BY_TICKER.clear(); DATA.instruments.forEach((i) => Object.entries(i.brokers).forEach(([b, opts]) => opts.forEach((o) => BY_TICKER.set(o.ticker, { key: i.key, broker: b })))); paint(); });
+      return;
+    }
     if (e.data.error) { $("coverText").textContent = `${pending}: ${e.data.error}. Trying again by itself; or press Restart chart below.`; retryLoad(); return; }
     pending = null; clearTimeout(coverTimer); clearTimeout(coverRetry); $("cover").hidden = true;
-    if (reapply) { reapply = false; reapplyAll(); for (const k in CAT) if (k.startsWith("vela:")) delete CAT[k]; indChanged(); }  // a fresh engine: put the saved indicators back
+    // a fresh engine: put the saved layout (drawings, chart settings) back, then the saved indicators (layouts.js)
+    if (reapply) { reapply = false; (window.layoutsBeforeReapply ? layoutsBeforeReapply() : Promise.resolve()).then(() => { reapplyAll(); for (const k in CAT) if (k.startsWith("vela:")) delete CAT[k]; indChanged(); }); }
     return;
   }
   if (e.data.evt === "pine") { onPineResult(e.data); return; }
@@ -312,7 +327,7 @@ async function pollStatus() {
 function paintStatus() {
   const L = $("lights"); L.innerHTML = "";
   DATA.brokers.forEach((b) => { const s = status[b.id] || {}, x = document.createElement("span");
-    x.innerHTML = `<span class="dot ${s.ok ? "ok" : "bad"}"></span>${SHORT[b.id]}`; x.title = `${b.name}: ${s.msg || ""}`; x.style.marginRight = "10px"; L.appendChild(x); });
+    x.innerHTML = `<span class="dot ${s.ok ? "ok" : "bad"}"></span>${shortOf(b.id)}`; x.title = `${b.name}: ${s.msg || ""}`; x.style.marginRight = "10px"; L.appendChild(x); });
   if (openPanel === "feeds") renderFeeds();
 }
 
@@ -377,4 +392,6 @@ setInterval(() => { $("clock").textContent = new Date().toISOString().slice(11, 
 init();
 </script>
 <script src="log_panel.js"></script>
+<script src="layouts.js"></script>
+<script src="symbol_search.js"></script>
 </body></html>

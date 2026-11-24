@@ -2,6 +2,16 @@
 // Inside the TradeX wrapper (?embed=1) the shell owns symbol, broker, timeframe, layout, theme and the status bar;
 // the page shows only its chart and its own drawing tools.
 window.LabEmbedded = new URLSearchParams(location.search).get("embed") === "1" && window.parent !== window;
+// TradingView habit: start typing a letter on the chart and the hub's Symbol Search opens with it.
+// Not while typing in a field (also inside shadow roots), not with Ctrl/Alt/Meta, not while a Vela dialog is open.
+// Window + capture phase: Vela stops key events on the chart canvas before they bubble to document.
+if (window.LabEmbedded) window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing || !/^[a-zA-Z]$/.test(e.key)) return;
+  let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+  if (a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable)) return;
+  if ([...document.querySelectorAll("dialog[open], [role=dialog]")].some((x) => x.checkVisibility ? x.checkVisibility() : x.offsetParent)) return;
+  e.preventDefault(); window.parent.postMessage({ evt: "symsearch", key: e.key }, location.origin);
+}, true);
 if (LabEmbedded) {
   document.documentElement.classList.add("embed");
   const st = document.createElement("style");
@@ -22,7 +32,9 @@ window.LabFeed = (() => {
   // Leave a 20 px bar at the bottom for the status strip, so it never covers the chart (standalone pages only).
   const chartBox = document.getElementById("chart");
   if (chartBox && !LabEmbedded) chartBox.style.bottom = "20px";
-  const wsUrl = () => `ws://${location.hostname || "localhost"}:${window.LabWsPort || 8765}`;
+  // 2026-11-24: the data port comes from the server (/api/symbols ws_port), so a second copy on other ports
+  // (the merged / installed TradeX) never talks to this one.
+  const wsUrl = () => `ws://${location.hostname || "localhost"}:${window.LabWSPort || 8765}`;
   const stats = { updates: 0, delays: [], exch: [], srcLag: [], lastAt: 0, firstBarAt: 0, errors: [], status: "" };
   window.labStats = stats;
 
@@ -92,8 +104,8 @@ window.LabFeed = (() => {
 window.LabSymbols = (() => {
   try {
     const x = new XMLHttpRequest(); x.open("GET", "/api/symbols", false); x.send();
-    const j = JSON.parse(x.responseText); window.LabMT5Status = j.mt5; window.LabARMStatus = j.arm; window.LabWsPort = j.ws_port;
-    if (j.arm !== "ok" && j.arm !== "off") console.warn("Remote MT5 unavailable:", j.arm);
+    const j = JSON.parse(x.responseText); window.LabMT5Status = j.mt5; window.LabARMStatus = j.arm; if (j.ws_port) window.LabWSPort = j.ws_port;
+    if (j.arm !== "ok" && j.arm !== "off") console.warn("Remote MT5 unavailable:", j.arm);   // "off" = not set up: fine
     if (j.mt5 !== "ok" && j.mt5 !== "off") console.warn("Local MT5 unavailable:", j.mt5);
     return j.symbols;
   } catch (e) {
@@ -101,7 +113,7 @@ window.LabSymbols = (() => {
   }
 })();
 window.srcOf = (t) => { const s = LabSymbols.find((x) => x.ticker === t); return s ? s.source : "binance"; };
-window.LabDefaultSymbol = (LabSymbols.find((s) => s.ticker === "RMT_XAUUSD") || LabSymbols.find((s) => s.ticker === "frxXAUUSD") || LabSymbols.find((s) => /^XAUUSD/.test(s.ticker) && s.source === "mt5") || LabSymbols.find((s) => s.ticker === "BTCUSD")).ticker;
+window.LabDefaultSymbol = (LabSymbols.find((s) => s.source === "arm" && /_XAUUSD$/.test(s.ticker)) || LabSymbols.find((s) => s.ticker === "frxXAUUSD") || LabSymbols.find((s) => /^XAUUSD/.test(s.ticker) && s.source === "mt5") || LabSymbols.find((s) => s.ticker === "BTCUSD")).ticker;
 
 // TradeX: the shell opens a page as hub-frame with ?symbol=&tf=&embed=1, sends {cmd:"set"} to switch,
 // and the page reports user changes back with LabNotify (only when embedded).
@@ -124,6 +136,10 @@ window.addEventListener("message", (e) => {
   if (e.data.cmd === "native:list") { if (!labChart.natives) answer({ ok: false, list: [] }); else labChart.natives().then((list) => answer({ ok: true, list }), (err) => answer({ ok: false, list: [], error: String(err) })); }
   if (e.data.cmd === "native:add") answer(labChart.addNative ? labChart.addNative(e.data.type, e.data.inputs) : { ok: false, error: "Vela only" });
   if (e.data.cmd === "chart:list") answer({ ok: true, list: labChart.onChart ? labChart.onChart() : [] });
+  // TradeX layouts (layouts.js): read / restore the chart's layout document (Vela only).
+  if (e.data.cmd === "doc:get") { try { answer(labChart.getDoc ? { ok: true, doc: labChart.getDoc() } : { ok: false, error: "layouts need the Vela engine" }); } catch (err) { answer({ ok: false, error: String(err) }); } }
+  if (e.data.cmd === "drawings:now") answer({ ok: true, list: labChart.drawingsNow ? labChart.drawingsNow() : [] });
+  if (e.data.cmd === "doc:apply") answer(labChart.applyDoc ? labChart.applyDoc(e.data.doc) : { ok: false, error: "layouts need the Vela engine" });
   if (e.data.cmd === "theme") { if (window.HubThemeApply) HubThemeApply(); if (labChart.applyTheme) labChart.applyTheme(); }
 });
 

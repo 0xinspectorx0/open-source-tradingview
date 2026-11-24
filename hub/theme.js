@@ -33,7 +33,7 @@ window.HubSettingsLoad = () => {
   try { s = JSON.parse(localStorage.getItem("chartHubTheme") || "{}"); } catch (_) {}
   return { preset: HubPresets[s.preset] ? s.preset : "graphite", font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars };
 };
-window.HubSettingsSave = (s) => { try { localStorage.setItem("chartHubTheme", JSON.stringify(s)); } catch (_) {} };
+window.HubSettingsSave = (s) => { try { localStorage.setItem("chartHubTheme", JSON.stringify(s)); } catch (_) {} if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
 
 // Build window.HubTheme from the saved settings and push it into CSS variables. Returns the theme.
 window.HubThemeApply = () => {

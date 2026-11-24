@@ -136,3 +136,35 @@ function renderOnChart(L) {
   });
   L.insertAdjacentHTML("beforeend", '<div class="dlg-empty">Settings (inputs, colours, visibility): click the indicator name on the chart legend, then the gear.</div>');
 }
+
+// + Compare (2026-11-24, TradingView's "Compare or add symbol"): draws another symbol on the current chart as a line,
+// rebased so it starts at the chart's own price on the first candle both have (shows which one moved more).
+// It is a small built-in Pine overlay (request.security), so it lives in the indicator list like any indicator:
+// remove it there or from the chart legend; layouts save it. Pine draws on Vela; on another engine it switches to Vela.
+const CMP_COLORS = ["#2962ff", "#e040fb", "#00bcd4", "#ff9800", "#4caf50", "#f44336"];
+function compareSource(key, ticker, color) {
+  return `//@version=5
+indicator("Compare ${key}", overlay=true)
+other = request.security("lab:${ticker}", timeframe.period, close)
+var float ratio = na
+if na(ratio) and not na(other) and other != 0
+    ratio := close / other
+plot(ratio * other, "${key}", color=color.new(${color}, 0), linewidth=2)`;
+}
+window.addCompare = function (pick) {
+  if (!pick || !pick.ticker) return;
+  if (pick.ticker === st.ticker) return;  // the chart's own symbol
+  const n = INDS.filter((x) => x.origin === "compare").length;
+  const color = CMP_COLORS[n % CMP_COLORS.length];
+  const ind = { key: `cmp:${pick.ticker}:${Date.now().toString(36)}`, name: `Compare ${pick.key}`, origin: "compare",
+                source: compareSource(pick.key, pick.ticker, color), on: true };
+  INDS.push(ind); saveInds(); pineAdd(ind);
+  return ind.key;
+};
+// Agents / console: TradeXCompare("ETHUSD") compares with that instrument at the chart's broker (or its first broker).
+window.TradeXCompare = function (key) {
+  const i = (DATA.instruments || []).find((x) => x.key === String(key).toUpperCase()); if (!i) return null;
+  const b = i.brokers[st.broker] ? st.broker : Object.keys(i.brokers)[0];
+  return window.addCompare({ key: i.key, broker: b, ticker: i.brokers[b][0].ticker });
+};
+// The + button itself is wired in symbol_search.js (loaded after the top bar).
