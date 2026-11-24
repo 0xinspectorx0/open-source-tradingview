@@ -55,7 +55,7 @@
       <button class="row" data-a="out">Sign out</button>`;
     menu.onclick = async (e) => {
       const b = e.target.closest("button[data-a]"); if (!b) return;
-      if (b.dataset.a === "out") { await sb.auth.signOut(); closeMenu(); return; }
+      if (b.dataset.a === "out") { await sb.auth.signOut(); closeMenu(); location.href = "web/signin.html"; return; }
       closeMenu(); const r = document.querySelector('#rail [data-panel="settings"]'); if (r) r.click();
     };
     document.body.appendChild(menu);

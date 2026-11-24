@@ -146,7 +146,14 @@
   if (!on.length) { err.textContent = "Sign-in is not available right now. You can still use TradeX without an account."; return; }
   await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   const sb = supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
-  const { data } = await sb.auth.getSession(); if (data.session) { location.replace("../hub.html"); return; }
+  const { data } = await sb.auth.getSession();
+  if (data.session) {   // signed in: greet, then open the chart
+    const u = data.session.user, m = u.user_metadata || {}, name = String(m.full_name || m.user_name || "").split(" ")[0];
+    document.querySelector("#card h1").textContent = "Welcome back" + (name ? ", " + name : "");
+    document.querySelector("#card .sub").textContent = "Opening your charts ...";
+    box.innerHTML = ""; document.querySelectorAll("#card .or, #card .guest, #card .fine").forEach((x) => (x.hidden = true));
+    setTimeout(() => location.replace("../hub.html"), 1400); return;
+  }
   box.onclick = async (e) => {
     const b = e.target.closest("button[data-p]"); if (!b) return;
     box.querySelectorAll("button").forEach((x) => (x.disabled = true)); b.lastChild.textContent = "Opening " + NAMES[b.dataset.p] + "..."; err.textContent = "";

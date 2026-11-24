@@ -150,8 +150,8 @@ def build():
     for page in PAGES:
         p = os.path.join(OUT, page)
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())
-        if page == "index.html":                        # the web entry goes straight to the hub
-            html = '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=hub.html"></head><body><a href="hub.html">Open TradeX</a></body></html>'
+        if page == "index.html":                        # the web entry is the sign-in page (signed-in visitors are sent on to the chart)
+            html = '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=web/signin.html"></head><body style="background:#0a0a0b"><a href="web/signin.html" style="color:#e8ecee">Open TradeX</a></body></html>'
         else:
             i = html.find("<head>")
             if i < 0:
