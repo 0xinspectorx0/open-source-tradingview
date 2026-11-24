@@ -101,7 +101,7 @@
       if (p.startsWith("/api/instruments/search")) return json(await search(q.get("q") || "", q.get("cat") || "", q.get("broker") || "", Math.max(0, +(q.get("offset") || 0)), Math.min(500, Math.max(1, +(q.get("limit") || 50)))));
       if (p.startsWith("/api/instruments")) return json(await instruments());
       if (p.startsWith("/api/status")) return json(status());
-      if (p.startsWith("/api/layouts")) return layouts(p, q, body);
+      if (p.startsWith("/api/layouts")) return window.TXAuth && window.TXAuth.user ? window.TXAuth.layouts(p, q, body) : layouts(p, q, body);
       if (p.startsWith("/api/restart")) return json({ running: false, step: "" });
       if (p.startsWith("/api/sources")) return json({ sources: [] });
       if (p.startsWith("/api/symbols")) return nativeFetch("web/data/symbols.json");

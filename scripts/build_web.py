@@ -146,7 +146,7 @@ def build():
         if STATIC.match(f):
             shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
     shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "__pycache__", "*.bak*"))
-    head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script>'
+    head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script><script src="web/auth_web.js"></script>'
     for page in PAGES:
         p = os.path.join(OUT, page)
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())
