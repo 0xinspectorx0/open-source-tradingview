@@ -471,6 +471,12 @@ def do_launcher():
     open(env_path, "w", encoding="utf-8").writelines(keep)
     port = saved.get("HUB_HTTP_PORT") or "8770"
     port = os.environ.get("HUB_HTTP_PORT", port)
+    if IS_WIN and os.environ.get("TRADEX_NO_SHORTCUT") == "1":   # nothing outside the TradeX folder (no Start-menu entry)
+        open(LAUNCH, "w").write(
+            "@echo off\r\ncd /d \"%~dp0\"\r\n"
+            f"start \"\" http://localhost:{port}/hub.html\r\n"
+            "\".venv\\Scripts\\python.exe\" hub\\server.py\r\n")
+        return True, f"start TradeX with {LAUNCH}"
     if IS_WIN:
         open(LAUNCH, "w").write(
             "@echo off\r\ncd /d \"%~dp0\"\r\n"
