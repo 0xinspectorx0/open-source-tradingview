@@ -463,8 +463,14 @@ def do_launcher():
     keep += ["# written by setup/tradex_setup.py\n", f"LOCAL_MT5={1 if mt5_on else 0}\n", f"TRADEX_DATA={DATA}\n"]
     if mt5_on:
         keep += [f"MT5_TERMINAL_PATH={MT5_EXE}\n", "MT5_PORTABLE=1\n"]
+    # Ports: a value set for this install (environment) is saved, so the shortcut and the server always agree
+    saved = {l.split("=", 1)[0].strip(): l.split("=", 1)[1].strip() for l in keep if "=" in l and not l.startswith("#")}
+    for k in ("HUB_HTTP_PORT", "HUB_WS_PORT"):
+        if os.environ.get(k) and saved.get(k) != os.environ[k]:
+            keep = [l for l in keep if l.split("=")[0].strip() != k] + [f"{k}={os.environ[k]}\n"]
     open(env_path, "w", encoding="utf-8").writelines(keep)
-    port = os.environ.get("HUB_HTTP_PORT", "8770")
+    port = saved.get("HUB_HTTP_PORT") or "8770"
+    port = os.environ.get("HUB_HTTP_PORT", port)
     if IS_WIN:
         open(LAUNCH, "w").write(
             "@echo off\r\ncd /d \"%~dp0\"\r\n"
