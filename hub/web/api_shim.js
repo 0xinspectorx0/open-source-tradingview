@@ -94,6 +94,10 @@
         }
         return json(await feed.history(q.get("symbol") || "BTCUSD", tf, limit, to));
       }
+      if (p.startsWith("/api/orderflow/") && window.TXWebOrderflow) {
+        const kind = p.split("/")[3], fn = window.TXWebOrderflow[kind];
+        if (fn) return json(await fn(q));
+      }
       if (p.startsWith("/api/instruments/search")) return json(await search(q.get("q") || "", q.get("cat") || "", q.get("broker") || "", Math.max(0, +(q.get("offset") || 0)), Math.min(500, Math.max(1, +(q.get("limit") || 50)))));
       if (p.startsWith("/api/instruments")) return json(await instruments());
       if (p.startsWith("/api/status")) return json(status());

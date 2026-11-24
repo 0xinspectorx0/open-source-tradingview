@@ -20,7 +20,7 @@ OUT = os.path.join(ROOT, "web_dist")
 WEB_FEEDS = {"binance", "bybit", "deriv", "coinbase", "kraken", "okx"}
 PAGES = ("hub.html", "vela.html", "lightweight.html", "klinechart.html", "index.html")
 # Desktop-only scripts left out of the web copy (they need the server: order flow, backend log terminal).
-DESKTOP_ONLY = re.compile(r'<script src="(orderflow_(?:delta|profile|charttypes|footprint_draw|svp_type|tpo_type)|log_panel)\.js"></script>\n?')
+DESKTOP_ONLY = re.compile(r'<script src="(log_panel)\.js"></script>\n?')   # order flow runs in the browser (web/orderflow_web.js)
 STATIC = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:html|js|css|png|svg|ico|woff|woff2)$")
 
 
@@ -146,7 +146,7 @@ def build():
         if STATIC.match(f):
             shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
     shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "__pycache__", "*.bak*"))
-    head = '<script src="web/feeds_web.js"></script><script src="web/api_shim.js"></script>'
+    head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script>'
     for page in PAGES:
         p = os.path.join(OUT, page)
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())

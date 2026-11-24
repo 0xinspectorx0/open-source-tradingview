@@ -11,7 +11,8 @@ exchange data itself (their own IP, so no shared rate limit and nothing to pay).
 | `/api/symbols`, `/api/instruments`, Symbol Search | `hub/web/data/*.json`, made by the build on a laptop, searched in the browser with the desktop ranking |
 | `/api/status` | which feeds answered this browser |
 | `/api/layouts` | this browser's `localStorage` |
-| order flow, logs, restart, MT5, alerts | not in the web beta (desktop version) |
+| `/api/orderflow/delta`, `profile`, `footprint` | `orderflow_web.js` (port of `hub/orderflow_api.py`, results identical): real taker-buy volume from Binance futures, else Binance spot (works where futures is blocked), else estimated. Footprint uses 1-minute buy/sell totals (no trade-by-trade data on the web) |
+| logs, restart, MT5, alerts | not in the web beta (desktop version) |
 
 `api_shim.js` is injected as the first script of each page **in the build copy only**; the desktop pages are never
 edited for the web. Theme: the "TradeX brand" preset in `hub/theme.js` is the web default.
