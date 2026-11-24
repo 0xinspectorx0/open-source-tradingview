@@ -61,6 +61,8 @@ Source of the diagram: [`docs/architecture/tradex-architecture.json`](docs/archi
 No Python, no admin rights and no account needed. Everything goes into one folder (`D:\TradeX` when drive D: has
 room, else your user folder; `~/TradeX` on macOS/Linux).
 
+New to this? Follow the picture guide: **[How to install TradeX (no coding needed)](docs/WALKTHROUGH.md)**.
+
 **Windows** (PowerShell):
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/saifullahshafin/open-source-tradingview/releases/latest/download/install.ps1 | iex"
