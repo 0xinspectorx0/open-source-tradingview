@@ -195,7 +195,7 @@ MT5_EXE = os.path.join(MT5_DIR, "terminal64.exe")
 
 def _mt5_skip():
     if not OPTS["mt5"]:
-        return "MT5 not wanted (--no-mt5)"
+        return "skipped (your choice; run setup again to add it)"
     if not IS_WIN:
         return "MT5 charts on Mac/Linux are not supported yet; free sources work"
     return None
@@ -580,7 +580,7 @@ def main():
             say("TradeX is ready with the free chart sources. MetaTrader 5 is installed and waits for you to open a "
                 "demo account (or log in) in its window; its charts appear in TradeX after that.")
             return 3
-        say("TradeX is ready. Start it from the Start menu (TradeX) or " + LAUNCH)
+        say("TradeX is ready. Start it with " + LAUNCH + ("" if os.environ.get("TRADEX_NO_SHORTCUT") == "1" or not IS_WIN else " or from the Start menu (TradeX)"))
         return 0
     a.print_help(); return 0
 
