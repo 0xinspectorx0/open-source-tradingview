@@ -391,6 +391,14 @@ $("layout").onchange = (e) => { const w = $("frame").contentWindow; if (w) w.pos
 setInterval(() => { $("clock").textContent = new Date().toISOString().slice(11, 19) + " UTC"; }, 1000);
 init();
 </script>
+<script>
+// Top bar wider than the window: a mouse wheel scrolls it sideways (wheel-to-sideways; touchpads already do this).
+document.getElementById("bar").addEventListener("wheel", (e) => {
+  const b = e.currentTarget;
+  if (b.scrollWidth <= b.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  b.scrollLeft += e.deltaY; e.preventDefault();
+}, { passive: false });
+</script>
 <script src="log_panel.js"></script>
 <script src="layouts.js"></script>
 <script src="symbol_search.js"></script>

@@ -12,13 +12,14 @@
   const css = document.createElement("style");
   css.textContent = [
     // Own corner at the right of the top bar (outside the scrolling row), so it never covers the bar's buttons.
-    "#bar{padding-right:52px!important}",
-    "#txauth{position:absolute;top:5px;right:8px;z-index:20;display:grid;place-items:center;height:28px;min-width:28px;padding:0 12px;border-radius:14px;cursor:pointer;",
-    "background:#e8ecee;color:#0a0a0b;border:0;font:600 12px var(--font,system-ui);white-space:nowrap}",
-    "#txauth:hover{background:#fff}#txauth:active{transform:translateY(1px)}",
+    "#bar{margin-right:44px}",
+    "#txauth{position:absolute;top:5px;right:9px;z-index:20;display:grid;place-items:center;width:28px;height:28px;padding:0;border-radius:50%;cursor:pointer;",
+    "background:#1c1e21;border:0;box-shadow:0 0 0 1px #2a2d31}",
+    "#txauth:hover{box-shadow:0 0 0 2px #797e86}#txauth:active{transform:translateY(1px)}",
+    "#txauth .ic{width:18px;height:18px;background:#b4bcbf;-webkit-mask:url(https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/user.svg) center/contain no-repeat;mask:url(https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/user.svg) center/contain no-repeat}",
+    "#txauth:hover .ic{background:#e8ecee}",
     "#txauth.in{padding:0;width:28px;background:#1c1e21;color:#e8ecee;box-shadow:0 0 0 1px #2a2d31;overflow:hidden;font-size:12px}",
     "#txauth.in:hover{box-shadow:0 0 0 2px #797e86}#txauth.in img{width:100%;height:100%;object-fit:cover}",
-    "html.txweb-banner #txauth{top:31px}",
     "#txauthm{position:fixed;z-index:100001;width:280px;border-radius:10px;background:#131416;border:1px solid #2a2d31;box-shadow:0 18px 48px rgba(0,0,0,.55);",
     "color:#b4bcbf;font:13px/1.5 var(--font,system-ui);overflow:hidden}",
     "#txauthm .hd{display:flex;gap:12px;align-items:center;padding:16px}#txauthm .big{width:44px;height:44px;border-radius:50%;background:#1c1e21;color:#e8ecee;",
@@ -36,7 +37,7 @@
     if (!btn) return;
     const u = A.user;
     btn.className = u ? "in" : "";
-    if (!u) { btn.textContent = "Sign in"; btn.title = "Sign in to keep your layouts on every device"; return; }
+    if (!u) { btn.innerHTML = '<span class="ic"></span>'; btn.title = "Sign in"; btn.setAttribute("aria-label", "Sign in"); return; }
     const pic = u.user_metadata && u.user_metadata.avatar_url;
     btn.innerHTML = pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase());
     btn.title = nameOf(u);
