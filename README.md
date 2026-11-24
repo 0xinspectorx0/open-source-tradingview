@@ -4,6 +4,10 @@ TradeX is a free, self-hosted, TradingView-style charting app that runs on your 
 It puts one interface over several free market-data feeds and three chart engines. It runs Pine Script
 indicators and can also show candles from your own MetaTrader 5 terminal, on this PC or on a VPS.
 
+**Try it in your browser, nothing to install:** [tradex-charts.vercel.app](https://tradex-charts.vercel.app) (web beta:
+free exchange charts, indicators, Pine Script, layouts saved in your browser. MT5, alerts and order flow need the
+free desktop version below.)
+
 > Not affiliated with, endorsed by, or connected to TradingView, Inc. "TradingView" is their trademark.
 > This project is an independent open-source tool. It is not financial advice.
 

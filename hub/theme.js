@@ -1,6 +1,10 @@
 // TradeX theme: presets + the user's own overrides (Settings panel), shared by the wrapper and all engines.
 // Saved in localStorage "chartHubTheme" (same origin, so every engine iframe reads the same settings).
 window.HubPresets = {
+  tradex: { label: "TradeX brand (logo)", mode: "dark",   // Saifullah's brand CORE 2026-11-25: chrome silver on black, bull green / bear red
+    bg: "#0a0a0b", panel: "#131416", raised: "#1c1e21", line: "#2a2d31", grid: "#1c1e21",
+    text: "#e8ecee", dim: "#b4bcbf", faint: "#797e86", accent: "#e8ecee", accentInk: "#0a0a0b",
+    up: "#46a76f", down: "#d65b4b", ok: "#46a76f", bad: "#d65b4b" },
   graphite: { label: "Graphite & amber", mode: "dark",   // chosen 2026-11-02 (_design/concepts/A_graphite_amber_1.jpg)
     bg: "#151412", panel: "#1b1a17", raised: "#24221e", line: "#2f2c27", grid: "#1f1d1a",
     text: "#e6dfd2", dim: "#958c7e", faint: "#5e584f", accent: "#e3a33a", accentInk: "#1a1407",
@@ -31,7 +35,7 @@ function hexA(hex, a) { // "#rrggbb" + alpha -> rgba()
 window.HubSettingsLoad = () => {
   let s = {};
   try { s = JSON.parse(localStorage.getItem("chartHubTheme") || "{}"); } catch (_) {}
-  return { preset: HubPresets[s.preset] ? s.preset : "graphite", font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars };
+  return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars };
 };
 window.HubSettingsSave = (s) => { try { localStorage.setItem("chartHubTheme", JSON.stringify(s)); } catch (_) {} if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
 
