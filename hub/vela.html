@@ -147,6 +147,11 @@ let resettingColours = 0;
 function guardCandleColours(chart) {
   if (!LabEmbedded || chart.hubGuarded) return;
   chart.hubGuarded = true;
+  // Web: TradeX logo in the chart corner instead of Vela's mark (licence kept: "Charts: Vela" link in the status bar,
+  // web/api_shim.js). Desktop keeps Vela's own mark.
+  if (window.TRADEX_WEB) try { chart.renderer.set("attribution", '<span style="display:flex;align-items:center;gap:7px;opacity:.9;pointer-events:none">' +
+    '<img src="web/brand/icon-64.png" alt="" style="width:22px;height:22px;border-radius:5px;display:block">' +
+    '<span style="font:600 13px var(--font,system-ui,sans-serif);letter-spacing:.02em">TradeX</span></span>'); } catch (e) { console.warn("attribution", e); }
   try { chart.renderer.setSettingsVisibility({ hidden: CANDLE_COLOUR_ROWS }); } catch (e) { console.warn("settings rows", e); }
   try { chart.renderer.onConfigChanged(() => {
     const cfg = chart.renderer.getConfig(), c = cfg.candles || {}, b = cfg.bars || {};
