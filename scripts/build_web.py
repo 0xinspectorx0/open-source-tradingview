@@ -158,6 +158,7 @@ def build():
                 raise SystemExit(f"{page}: no <head>")
             html = html[: i + 6] + head + '<meta name="viewport" content="width=device-width, initial-scale=1">' + html[i + 6:]
         open(p, "w", encoding="utf-8", newline="\n").write(html)
+    patch_candles(os.path.join(OUT, "vela.bundle.js"))
     # Old sign-in address forwards to "/" (bookmarks keep working on every host).
     open(os.path.join(OUT, "web", "signin.html"), "w", encoding="utf-8", newline="\n").write(
         '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/' + '">'
@@ -191,6 +192,21 @@ def build():
         raise SystemExit(1)
     n = sum(len(fs) for _, _, fs in os.walk(OUT))
     print(f"web_dist: {n} files, personal-data scan clean")
+
+
+def patch_candles(path):
+    """TradeX candle look (Saifullah 2026-11-25: Matte 3D + Lift), web build only; the desktop bundle stays as built.
+    Each candle body gets a light left edge and a darker right edge (the GPU blends them across = soft rounded matte),
+    and a soft dark shadow just below-right (lift). Thin candles (zoomed far out) stay flat."""
+    b = open(path, encoding="utf-8").read()
+    old = "e.rect(x.bodyX,E,x.bodyW,M,T)"
+    if b.count(old) != 1:
+        raise SystemExit("vela.bundle.js: candle body call not found once (Vela changed?); candle patch not applied")
+    new = ("(x.bodyW>=3?(e.rect(x.bodyX+1,E+2,x.bodyW,M,[0,0,0,.42*T[3]]),"
+           "e.quad4(x.bodyX,E,__txL(T),x.bodyX+x.bodyW,E,__txD(T),x.bodyX+x.bodyW,E+M,__txD(T),x.bodyX,E+M,__txL(T)))"
+           ":e.rect(x.bodyX,E,x.bodyW,M,T))")
+    helpers = "var __txL=c=>[c[0]+(1-c[0])*.14,c[1]+(1-c[1])*.14,c[2]+(1-c[2])*.14,c[3]],__txD=c=>[c[0]*.62,c[1]*.62,c[2]*.62,c[3]];" + chr(10)
+    open(path, "w", encoding="utf-8", newline=chr(10)).write(helpers + b.replace(old, new, 1))
 
 
 def root_signin():

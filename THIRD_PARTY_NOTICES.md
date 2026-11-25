@@ -26,6 +26,12 @@ Notice files: [licenses/NOTICE-vela.txt](licenses/NOTICE-vela.txt), [licenses/NO
   `attributionLogo` option (on by default, and left on here) satisfies this.
 - **KLineChart:** *KLineChart, Copyright (c) 2019 lihu.*
 
+## Changes to Vela in the web build
+
+`scripts/build_web.py` (`patch_candles`) changes one line of the web copy of `hub/vela.bundle.js`: candle bodies are
+drawn with a lighter left edge, a darker right edge and a soft shadow (TradeX "Matte 3D + Lift" look). The desktop
+bundle in `hub/` is unchanged.
+
 ## Rebuilding the bundled files
 
 `hub/vela.bundle.js` and `hub/vendor/` are built from the exact versions pinned in `build/package-lock.json`:
