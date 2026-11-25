@@ -55,6 +55,7 @@
       <div><div class="nm">${esc(nameOf(u))}</div><div class="em">${esc(u.email || "")}</div></div></div>
       <div class="note">Your layouts and indicator templates are saved to this account.</div>
       ${nLocal ? `<button class="row" data-a="import">Copy ${nLocal} item${nLocal === 1 ? "" : "s"} saved in this browser as a guest into your account</button>` : ""}
+      ${(A.community || []).map((c) => `<a class="row" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>`).join("")}
       <button class="row" data-a="account">Account settings</button>
       <button class="row" data-a="settings">Theme and colours</button>
       <button class="row" data-a="out">Sign out</button>`;
@@ -151,6 +152,8 @@
   async function start() {
     let cfg = {};
     try { cfg = await (await fetch("web/auth_config.json", { cache: "no-store" })).json(); } catch (_) {}
+    // Community links for the account menu (web/auth_config.json "community": [{name, url}]); empty url = hidden.
+    A.community = (Array.isArray(cfg.community) ? cfg.community : []).filter((c) => c && /^https:\/\//.test(c.url || "") && c.name);
     if (!cfg.url || !cfg.anonKey) return;   // login not configured yet: no button
     // Show only the sign-in methods switched on in Supabase (none on = no button), so turning one on needs no redeploy.
     try { const st = await (await fetch(cfg.url + "/auth/v1/settings", { headers: { apikey: cfg.anonKey } })).json(); A.providers = ["google", "github"].filter((p) => st.external && st.external[p]); }
