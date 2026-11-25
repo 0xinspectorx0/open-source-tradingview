@@ -3,9 +3,9 @@
 // Your own Pine Script (v1-v6) comes in through the Pine Editor ("My scripts").
 const SECTIONS = [
   ["PERSONAL", [["fav", "Favorites"], ["mine", "My scripts"], ["chart", "On chart"]]],
-  ["BUILT-IN", [["vela", "Vela native"]]],
+  ["BUILT-IN", [["lib", "TradeX library"], ["vela", "Vela native"]]],
 ];
-let dlg = { sec: "vela", chip: "1", q: "", search: null, rowMsg: {} };
+let dlg = { sec: "lib", chip: "1", q: "", search: null, rowMsg: {} };
 const CAT = {};  // loaded lists, by "sec:chip"
 
 function openIndDlg() {
@@ -47,7 +47,9 @@ function renderIndDialog() {
 async function loadCat(sec, chip) {
   const k = sec + ":" + chip; if (CAT[k]) return CAT[k];
   let rows = [];
-  if (sec === "vela") {
+  if (sec === "lib") {   // TradeX's own Pine scripts (pine_library.js)
+    rows = (window.TX_PINE_LIB || []).map((x) => ({ src: "lib", id: "lib:" + x.id, libId: x.id, name: x.name, sub: x.sub, open: true, kind: "indicator" }));
+  } else if (sec === "vela") {
     // The chart may still be loading when the dialog opens: Vela then answers with an empty list. Ask again a few
     // times, and never keep an empty answer (it used to stay empty for the whole visit, 2026-11-25).
     let r = await ask("native:list");
@@ -108,6 +110,7 @@ async function addRow(r) {
   const stamp = Date.now().toString(36);
   let ind;
   if (r.src === "vela") ind = { key: `native:${r.type}:${stamp}`, kind: "native", type: r.type, name: r.name, origin: "Vela", on: true };
+  else if (r.src === "lib") { const x = (window.TX_PINE_LIB || []).find((y) => y.id === r.libId); if (!x) return; ind = { key: `lib:${x.id}:${stamp}`, libId: x.id, name: x.name, origin: "TradeX library", source: x.source, on: true }; }
   else if (r.src === "mine") { const m = MINE.find((x) => x.id === r.mineId); if (!m) return; ind = { key: `own:${m.id}:${stamp}`, mineId: m.id, name: m.name, origin: "own", source: m.source, on: true }; }
   else return flash("This script is not available here.", true);
   ind.rowId = r.id; INDS.push(ind); saveInds(); flash("Adding to the chart...");
