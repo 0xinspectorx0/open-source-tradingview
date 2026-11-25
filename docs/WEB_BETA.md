@@ -1,4 +1,7 @@
-# TradeX web beta (tradex-charts.vercel.app)
+# TradeX web beta (tradex.pages.dev)
+
+Hosted on Cloudflare Pages since 2026-11-25 (free, unlimited static requests). The old address
+tradex-charts.vercel.app shows a "TradeX has moved" page that forwards here.
 
 The same TradeX pages, served as a static site with **no TradeX server**. Each visitor's browser fetches free
 exchange data itself (their own IP, so no shared rate limit and nothing to pay).
@@ -24,7 +27,8 @@ OKX charts stop at 1,500 candles and Coinbase at 3,000 (small pages per request)
 ```
 python scripts/build_web.py --refresh-lists   # laptop only: re-make hub/web/data/ (runs a clean public server copy)
 python scripts/build_web.py                   # copy + inject + personal-data scan -> web_dist/ (fails on any hit)
-cd web_dist && vercel deploy --prod           # manual deploy uploads ONLY web_dist/
+npx wrangler pages deploy <copy of web_dist without .vercel/ and vercel.json> --project-name <your project>
+# addresses: / = sign-in, /hub = chart (Pages drops .html); web_dist/_headers and _redirects are read by Pages
 ```
 Lists are made on a laptop, never on Vercel: Vercel builds run in the US, where Binance.com and Bybit refuse requests.
 The repo's `vercel.json` is ready for Vercel to build from GitHub (it only copies and scans, no network); that path is not tested yet.

@@ -162,6 +162,15 @@ function guardCandleColours(chart) {
   }); } catch (e) { console.warn("config guard", e); }
 }
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest(".vela-dialog--settings .vela-sd-btn"); if (b) resettingColours = Date.now(); }, true);
+// Opacity of a CSS colour as two hex digits ("#rrggbbaa", "rgba(r,g,b,a)", "#rrggbb" = opaque); unknown -> 42% ("6b").
+function volAlpha(c) {
+  const s = String(c || "").trim(), hx = /^#[0-9a-f]{8}$/i.exec(s), rg = /^rgba?\(([^)]+)\)$/i.exec(s);
+  if (hx) return s.slice(7, 9);
+  if (/^#[0-9a-f]{6}$/i.test(s)) return "ff";
+  if (rg) { const p = rg[1].split(/[,\s/]+/).filter(Boolean); const a = p.length > 3 ? parseFloat(p[3]) * (String(p[3]).endsWith("%") ? 0.01 : 1) : 1;
+    if (Number.isFinite(a)) return Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, "0"); }
+  return "6b";
+}
 function colorChart(chart) {
   const t = HubTheme;
   guardCandleColours(chart);
@@ -178,8 +187,14 @@ function colorChart(chart) {
       trades: { longColor: t.up, shortColor: t.down },
     });
   } catch (e) { console.warn("theme config", e); }
-  try { // built-in volume keeps its own colours: recolour it only if it is on the chart
-    if (chart.presentNativeIndicators().includes("volume")) chart.addNativeIndicator("volume").setInputs({ upColor: t.up + "6b", downColor: t.down + "6b" });
+  try { // built-in volume: colour follows the candle colours, OPACITY stays what the person set in its settings
+    // (bug 2026-11-25: every theme pass forced 42% and wiped the person's opacity). First time = 42%.
+    if (chart.presentNativeIndicators().includes("volume")) {
+      const h = chart.addNativeIndicator("volume"), cur = (h.inputValues && h.inputValues()) || {};
+      const own = (c) => (c && !/^#(089981|f23645)$/i.test(c) ? volAlpha(c) : "6b");   // Vela's own opaque defaults = not set yet
+      const want = { upColor: t.up + own(cur.upColor), downColor: t.down + own(cur.downColor) };
+      if (String(cur.upColor).toLowerCase() !== want.upColor.toLowerCase() || String(cur.downColor).toLowerCase() !== want.downColor.toLowerCase()) h.setInputs(want);
+    }
   } catch (e) { console.warn("volume colours", e); }
 }
 function applyTheme() {
