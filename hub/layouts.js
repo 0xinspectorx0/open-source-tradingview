@@ -126,7 +126,8 @@
 
   function setState(s) { state = s; paintButton(); if (!menu.hidden) { const e = menu.querySelector(".hd .sub"); if (e) e.textContent = s || "All changes saved"; } }
   function paintButton() { btnEl.querySelector(".nm").textContent = curName || "Layouts"; btnEl.querySelector(".st").textContent = state === "Saving..." ? "saving" : (state.startsWith("Not") ? "!" : ""); }
-  async function refreshList() { try { list = await api(""); const c = list.layouts.find((x) => x.id === curId); if (c) curName = c.name; paintButton(); if (!menu.hidden) render(); } catch (_) {} }
+  async function refreshList() { try { list = await api(""); const c = list.layouts.find((x) => x.id === curId); if (c) curName = c.name; paintButton(); if (!menu.hidden) render(); return true; } catch (e) { setState("Not loaded: " + e.message); return false; } }
+  window.layoutsRefresh = refreshList;
   const when = (t) => { const d = new Date(t * 1000); return d.toISOString().slice(0, 16).replace("T", " ") + " UTC"; };
 
   function render() {
@@ -176,11 +177,25 @@
   });
   // Every chart change inside Vela (drawings, settings, symbol) marks the layout dirty.
   window.addEventListener("message", (e) => { if (e.origin === location.origin && e.data && (e.data.evt === "doc:dirty" || e.data.evt === "market")) schedule(); });
-  // First visit: create "My layout" from what is on screen, so drawings and indicators survive a reload out of the box.
+  // Start-up: no current layout but the store has some -> open the most recent one (never make a duplicate).
+  // Truly empty store (first visit) -> create "My layout" from what is on screen, so drawings and indicators survive a
+  // reload out of the box. If the list could not be read, change nothing (no pointer cleared, no layout made).
+  const openLatest = () => {
+    // one automatic open per tab per minute, so a store that keeps losing the pointer can never cause a reload loop
+    let t = 0; try { t = +sessionStorage.getItem("chartHubAutoOpen") || 0; sessionStorage.setItem("chartHubAutoOpen", String(Date.now())); } catch (_) {}
+    if (Date.now() - t < 60000) return false;
+    loadLayout(list.layouts[0].id); return true;
+  };
   (async () => {
-    await refreshList();
+    const ok = await refreshList();
+    if (!ok) { paintButton(); return; }
     if (curId && !list.layouts.find((x) => x.id === curId)) { curId = ""; lsSet(LS_ID, ""); }
-    if (!curId) { bootApplied = true; ready = true; setTimeout(() => { if (!curId) saveNow(false, list.layouts.length ? "My layout " + (list.layouts.length + 1) : "My layout"); }, 6000); }
+    if (!curId && list.layouts.length && openLatest()) return;
+    if (!curId) { bootApplied = true; ready = true; setTimeout(async () => {
+      if (curId || !(await refreshList())) return;          // read the list again right before creating
+      if (list.layouts.length) { openLatest(); return; }
+      saveNow(false, "My layout");
+    }, 6000); }
     paintButton();
   })();
 })();

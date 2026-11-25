@@ -65,6 +65,19 @@
     return json({ error: "not found" }, 404);
   }
 
+  // Which store answers: the account (signed in) or this browser (guest). Wait until sign-in has settled first: the
+  // hub asks for its layouts at once on load, before the sign-in library is up, and used to get the guest store
+  // (wrong list, pointer cleared, a fresh "My layout" made). If a session exists but the account cannot be reached,
+  // say so instead of quietly using guest storage.
+  const hasSession = () => { try { return Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k)); } catch (_) { return false; } };
+  async function layoutsRoute(p, q, body) {
+    const A = window.TXAuth;
+    if (A && A.whenReady) await Promise.race([A.whenReady, new Promise((r) => setTimeout(r, 20000))]);
+    if (A && A.user) return A.layouts(p, q, body);
+    if (A && (!A.ready || A.failed) && hasSession()) return json({ error: "your account is not reachable right now; nothing was changed, try again in a moment" }, 503);
+    return layouts(p, q, body);
+  }
+
   function status() {
     F.probeAll();
     const out = {};
@@ -101,7 +114,7 @@
       if (p.startsWith("/api/instruments/search")) return json(await search(q.get("q") || "", q.get("cat") || "", q.get("broker") || "", Math.max(0, +(q.get("offset") || 0)), Math.min(500, Math.max(1, +(q.get("limit") || 50)))));
       if (p.startsWith("/api/instruments")) return json(await instruments());
       if (p.startsWith("/api/status")) return json(status());
-      if (p.startsWith("/api/layouts")) return window.TXAuth && window.TXAuth.user ? window.TXAuth.layouts(p, q, body) : layouts(p, q, body);
+      if (p.startsWith("/api/layouts")) return await layoutsRoute(p, q, body);
       if (p.startsWith("/api/restart")) return json({ running: false, step: "" });
       if (p.startsWith("/api/sources")) return json({ sources: [] });
       if (p.startsWith("/api/symbols")) return nativeFetch("web/data/symbols.json");

@@ -6,7 +6,10 @@
   "use strict";
   if (window.parent !== window) return;   // top page only (the hub); chart frames never sign in
   const SDK = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
-  const A = (window.TXAuth = { user: null, ready: false });
+  // whenReady settles once we KNOW whether someone is signed in (or sign-in is off / failed). The layout calls wait for
+  // it, so a signed-in person's layouts are never read from or written to this browser's guest storage by mistake.
+  let readyRes; const whenReady = new Promise((r) => (readyRes = r));
+  const A = (window.TXAuth = { user: null, ready: false, failed: false, whenReady });
   let sb = null, btn = null, menu = null, busy = "";
 
   const css = document.createElement("style");
@@ -46,16 +49,27 @@
   function openMenu() {
     closeMenu();
     const u = A.user; if (!u) { location.href = "web/signin.html"; return; }
-    const pic = u.user_metadata && u.user_metadata.avatar_url;
+    const pic = u.user_metadata && u.user_metadata.avatar_url, nLocal = localRows().length;
     menu = document.createElement("div"); menu.id = "txauthm";
     menu.innerHTML = `<div class="hd"><span class="big">${pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase())}</span>
       <div><div class="nm">${esc(nameOf(u))}</div><div class="em">${esc(u.email || "")}</div></div></div>
       <div class="note">Your layouts and indicator templates are saved to this account.</div>
+      ${nLocal ? `<button class="row" data-a="import">Copy ${nLocal} item${nLocal === 1 ? "" : "s"} saved in this browser as a guest into your account</button>` : ""}
       <button class="row" data-a="settings">Settings and theme</button>
       <button class="row" data-a="out">Sign out</button>`;
     menu.onclick = async (e) => {
       const b = e.target.closest("button[data-a]"); if (!b) return;
-      if (b.dataset.a === "out") { await sb.auth.signOut(); closeMenu(); location.href = "web/signin.html"; return; }
+      if (b.dataset.a === "out") {
+        await sb.auth.signOut();
+        try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {}   // the guest must not inherit the account's layout pointer
+        closeMenu(); location.href = "web/signin.html"; return;
+      }
+      if (b.dataset.a === "import") {
+        b.disabled = true; b.textContent = "Copying ...";
+        try { const n = await importLocal(); b.textContent = `Copied ${n}. Open the Layouts menu to see them.`; if (window.layoutsRefresh) window.layoutsRefresh(); }
+        catch (err) { b.textContent = "Could not copy: " + (err.message || err); }
+        return;
+      }
       closeMenu(); const r = document.querySelector('#rail [data-panel="settings"]'); if (r) r.click();
     };
     document.body.appendChild(menu);
@@ -92,12 +106,20 @@
     }
     return json({ error: "not found" }, 404);
   };
-  // First sign-in on this browser: copy its saved layouts into the account (only ids the account does not have yet).
-  async function adoptLocal() {
+  // Guest layouts saved in THIS browser (before signing in) stay separate. Copying them into the account is the
+  // person's choice (a row in the account menu), never automatic: the old automatic copy ran on every page load and
+  // poured the guest "My layout" into the account (bug fixed 2026-11-25).
+  const localRows = () => {
     let local = {}; try { local = JSON.parse(localStorage.getItem("tradexWebLayouts") || "{}"); } catch (_) {}
     const rows = [];
-    for (const kind of ["layouts", "templates"]) for (const [id, v] of Object.entries(local[kind] || {})) rows.push({ user_id: A.user.id, kind, id, name: v.name, saved_at: v.saved_at, summary: v.summary, doc: v.doc });
-    if (rows.length) await sb.from(T).upsert(rows, { onConflict: "user_id,kind,id", ignoreDuplicates: true });
+    for (const kind of ["layouts", "templates"]) for (const [id, v] of Object.entries(local[kind] || {})) rows.push({ user_id: A.user.id, kind, id, name: v.name || "Untitled", saved_at: v.saved_at || 0, summary: v.summary || "", doc: v.doc || {} });
+    return rows;
+  };
+  async function importLocal() {
+    const rows = localRows(); if (!rows.length) return 0;
+    const { error } = await sb.from(T).upsert(rows, { onConflict: "user_id,kind,id", ignoreDuplicates: true });
+    if (error) throw error;
+    return rows.length;
   }
 
   async function start() {
@@ -114,11 +136,14 @@
     const app = document.getElementById("app"); if (app) app.appendChild(btn);
     sb.auth.onAuthStateChange((ev, session) => {
       const was = A.user && A.user.id; A.user = session ? session.user : null; busy = ""; paint();
-      if (A.user && A.user.id !== was) adoptLocal().catch(() => {});
-      if ((A.user && A.user.id) !== was && window.layoutsRefresh) window.layoutsRefresh();
+      // Session ended under us (expired, signed out in another tab): back to the sign-in page, so later saves can
+      // never fall into guest storage silently.
+      if (was && !A.user && ev === "SIGNED_OUT") { try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {} location.href = "web/signin.html"; return; }
+      if (A.ready && (A.user && A.user.id) !== was && window.layoutsRefresh) window.layoutsRefresh();
     });
-    const { data } = await sb.auth.getSession(); A.user = data.session ? data.session.user : null; A.ready = true; paint();
+    const { data } = await sb.auth.getSession(); A.user = data.session ? data.session.user : null; paint();
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => start().catch((e) => console.warn("sign-in off:", e)));
-  else start().catch((e) => console.warn("sign-in off:", e));
+  const run = () => start().catch((e) => { A.failed = true; console.warn("sign-in off:", e); }).finally(() => { A.ready = true; readyRes(); });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
 })();

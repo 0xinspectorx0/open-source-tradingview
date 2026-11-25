@@ -361,6 +361,12 @@ function renderSettings() {
   const ib = document.createElement("label"), ibx = document.createElement("input"); ibx.type = "checkbox"; ibx.checked = s.indicatorBars;
   ib.append("Let indicators recolour candles", ibx); ib.title = "Off: your two colours always win. On: an indicator using Pine barcolor() may paint candle bodies."; cs.appendChild(ib);
   ibx.onchange = () => { HubSettingsSave({ ...HubSettingsLoad(), indicatorBars: ibx.checked }); loadEngine(); };  // indicators re-run with the new rule
+  // Symbol watermark strength (Vela engine; it sits behind the candles). 0 = hidden, Vela default 5.
+  const wl = document.createElement("label"), wr = document.createElement("input"), wv = document.createElement("span");
+  wr.type = "range"; wr.min = "0"; wr.max = "40"; wr.step = "1"; wr.value = String(s.watermark); wv.textContent = s.watermark + "%";
+  wl.append("Symbol watermark", wr, wv); wl.title = "How strongly the symbol name shows behind the candles (Vela engine). 0 = hidden."; cs.appendChild(wl);
+  wr.oninput = () => { wv.textContent = wr.value + "%"; HubSettingsSave({ ...HubSettingsLoad(), watermark: +wr.value }); HubThemeApply();
+    const w = $("frame").contentWindow; if (w) w.postMessage({ cmd: "theme" }, location.origin); };
   const ui = colors("Interface", [["bg", "Chart background"], ["panel", "Panels and bars"], ["text", "Text"], ["dim", "Secondary text"], ["line", "Borders"], ["grid", "Grid lines"], ["accent", "Accent (selection, price)"]]);
   const r = document.createElement("button"); r.className = "reset"; r.textContent = "Reset colours to theme";
   r.onclick = () => { HubSettingsSave({ ...HubSettingsLoad(), overrides: {} }); themeChanged(); }; ui.appendChild(r);

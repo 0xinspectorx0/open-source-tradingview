@@ -5,11 +5,14 @@
 // that minute's range (the desktop's "est" fill) and is flagged est.
 (function () {
   "use strict";
-  const F = window.TXWebFeeds, SEC = F.SEC;
+  const F = window.TXWebFeeds, SEC = { ...F.SEC, S1: 1 };   // S1 = Binance spot 1-second candles (footprint only)
   const INTRABAR = { M1: "M1", M5: "M1", M15: "M1", M30: "M5", H1: "M5", H4: "M15", D1: "H1" };
-  const BTF = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H4: "4h", D1: "1d" };
+  const BTF = { S1: "1s", M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H4: "4h", D1: "1d" };
   const MAX_ROWS = 20000, FAPI = "https://fapi.binance.com/fapi/v1", SPOT = "https://data-api.binance.vision/api/v3";
   const RENAME = { XCU: "COPPER", XNG: "NATGAS", XBT: "BTC", XDG: "DOGE" };
+  // Binance spot has no gold pair; PAXG (a gold-backed coin) stands in for gold's 1-second price path. Price gaps are
+  // removed by the same shift used for every Binance series (median gap to the chart's own candles).
+  const SPOT_PROXY = { XAUUSDT: "PAXGUSDT" };
   let futP = null;
   const futures = () => futP || (futP = fetch(FAPI + "/exchangeInfo").then((r) => r.json())
     .then((d) => new Set(d.symbols.filter((s) => s.status === "TRADING").map((s) => s.symbol))).catch(() => { futP = null; return new Set(); }));
@@ -70,7 +73,10 @@
     if (ts.length && b > ts[ts.length - 1] - sec) need.push([Math.max(a, ts[ts.length - 1]), b]);
     for (const [lo, hi] of need) {
       if (hi < lo) continue;
-      const got = src === "real" ? await binanceRows(await realSymbol(ticker), itf, lo, hi) : await estimatedRows(feed, ticker, itf, lo, hi);
+      // 1-second candles exist on Binance spot only: same coin, spot market.
+      const sym = src === "real" ? await realSymbol(ticker) : null;
+      const spotSym = () => { const b = String(sym).replace(/^SPOT:/, ""); return "SPOT:" + (SPOT_PROXY[b] || b); };
+      const got = src === "real" ? await binanceRows(itf === "S1" ? spotSym() : sym, itf, lo, hi) : await estimatedRows(feed, ticker, itf, lo, hi);
       for (const [t, v] of got) have.set(t, v);
     }
     return new Map([...have].filter(([t]) => t >= a && t <= b).sort((x, y) => x[0] - y[0]));
@@ -208,14 +214,50 @@
       const rng = cb.map((x) => x.high - x.low).filter((x) => x > 0).sort((a, b) => a - b);
       rowSize = rng.length ? niceStep(rng[Math.floor(rng.length / 2)] / 7) : 1;
     }
+    // Bug fixed 2026-11-25: each minute's buy/sell totals used to be spread EVENLY over the minute's range, so every row
+    // that minute touched got the same numbers (on a 1m chart: every row of a candle identical). Now the totals stay the
+    // futures minute totals (so footprint delta/total match the delta panel), and the 1-second price path of Binance
+    // spot (gold: PAXG) decides WHERE in the range they go: each second weighs its row by its volume plus a little for
+    // time spent there, buyers and sellers by that second's own split. 25% stays an even spread across the minute's range
+    // (the spot path is thinner than futures). Windows over 5 hours or no 1-second data = the old even spread.
     const [m1] = await realOnChart(src, feed, ticker, tf, "M1", start, end + sec - 60, end), candles = new Map();
+    let s1 = null, shaped = 0;
+    if (src === "real" && end - start <= 5 * 3600) { try { [s1] = await realOnChart(src, feed, ticker, tf, "S1", start, end + sec - 1, end); } catch (_) { s1 = null; } }
+    const EVEN = 0.25;
+    // Base shape inside one minute (when the 1-second path says nothing about a row): a soft tent peaking near where
+    // the minute spent its end (high, low and twice the close), never below 15% of the peak. A flat even spread made
+    // runs of identical numbers.
+    const tent = (r0, r1, v) => {
+      const w = new Map(), n = r1 - r0 + 1; if (n === 1) { w.set(r0, 1); return w; }
+      const c = (v[3] + v[4] + 2 * v[5]) / 4, half = Math.max(rowSize, (v[3] - v[4]) / 2); let t = 0;
+      for (let r = r0; r <= r1; r++) { const x = Math.max(0.15, 1 - Math.abs((r + 0.5) * rowSize - c) / (2 * half)); w.set(r, x); t += x; }
+      for (const [r, x] of w) w.set(r, x / t); return w;
+    };
     for (const [m, v] of m1) {
       const bt = bucket(m); if (bt < start || bt > end) continue;
       const r0 = Math.floor(v[4] / rowSize + 1e-9), r1 = Math.floor(v[3] / rowSize + 1e-9), n = r1 - r0 + 1;
+      const wb = new Map(), ws = new Map();
+      let secs = [];
+      if (s1) for (let k = 0; k < 60; k++) { const x = s1.get(m + k); if (x) secs.push(x); }
+      if (secs.length >= 30) {
+        shaped++;
+        const vt = secs.reduce((a, x) => a + x[0] + x[1], 0), eps = vt / secs.length * 0.1 + 1e-12, mShare = v[0] + v[1] > 0 ? v[0] / (v[0] + v[1]) : 0.5;
+        const pb = new Map(), ps = new Map(); let sb = 0, ss = 0;
+        for (const x of secs) {
+          const r = Math.min(r1, Math.max(r0, Math.floor(x[5] / rowSize + 1e-9))), vol = x[0] + x[1], share = vol > 0 ? x[0] / vol : mShare, w = vol + eps;
+          pb.set(r, (pb.get(r) || 0) + w * share); ps.set(r, (ps.get(r) || 0) + w * (1 - share)); sb += w * share; ss += w * (1 - share);
+        }
+        const base = tent(r0, r1, v);
+        for (let r = r0; r <= r1; r++) {
+          wb.set(r, EVEN * base.get(r) + (1 - EVEN) * (sb > 0 ? (pb.get(r) || 0) / sb : base.get(r)));
+          ws.set(r, EVEN * base.get(r) + (1 - EVEN) * (ss > 0 ? (ps.get(r) || 0) / ss : base.get(r)));
+        }
+      } else { const base = tent(r0, r1, v); for (let r = r0; r <= r1; r++) { wb.set(r, base.get(r)); ws.set(r, base.get(r)); } }
       if (!candles.has(bt)) candles.set(bt, new Map());
       const c = candles.get(bt);
-      for (let r = r0; r <= r1; r++) { const x = c.get(r) || [0, 0]; x[0] += v[0] / n; x[1] += v[1] / n; c.set(r, x); }
+      for (let r = r0; r <= r1; r++) { const x = c.get(r) || [0, 0]; x[0] += v[0] * wb.get(r); x[1] += v[1] * ws.get(r); c.set(r, x); }
     }
+    const fine = shaped > 0;
     const out = [];
     for (const bt of [...candles.keys()].sort((a, b) => a - b)) {
       const c = candles.get(bt), ks = [...c.keys()], lo = Math.min(...ks), hi = Math.max(...ks), buy = [], sell = [];
@@ -224,7 +266,8 @@
     }
     return { candles: out, source: src, real_symbol: await realSymbol(ticker), row_size: rowSize, unit: unitOf(src), covered_from: start, pending: false,
       est_candles: src === "real" ? out.length : 0,
-      method: src === "real" ? "Binance 1-minute buy/sell totals spread over each minute's range (web version: no trade-by-trade data)" : "chart 1-minute candles spread over their range (coarse estimate)" };
+      method: fine ? "Binance futures 1-minute buy/sell totals, placed along Binance spot's 1-second price path (web version: no trade-by-trade data)"
+        : src === "real" ? "Binance 1-minute buy/sell totals spread over each minute's range (web version: no trade-by-trade data)" : "chart 1-minute candles spread over their range (coarse estimate)" };
   }
 
   window.TXWebOrderflow = { delta, profile, footprint, realSymbol };

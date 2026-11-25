@@ -17,7 +17,33 @@
   <button id="auto">Code trendline</button></div>
 <div id="chart"></div>
 <style>
+  /* Chart settings window (2026-11-25): Vela sizes it from the browser window (70vh tall, 8vh gap on top, list at
+     least 360px). Inside a short chart frame (small laptop, 2/4/8-chart grid) its bottom was cut off and could not be
+     scrolled to; zooming the page out was the only way. Size it from the chart frame instead; the list scrolls. */
+  .vela-dialog-positioner:has(.vela-dialog--settings) { padding-top: 8px !important; }
+  .vela-dialog--settings { max-height: calc(100% - 16px) !important; display: flex; flex-direction: column; }
+  .vela-dialog--settings .vela-dialog-body { min-height: 0 !important; }
+  .vela-dialog--settings div:has(> .vela-sd-pane) { min-height: 0 !important; max-height: none !important; }
+  .vela-dialog--settings .vela-sd-pane, .vela-dialog--settings .vela-sd-rail { min-height: 0; }
+  /* Symbol watermark (2026-11-25): Vela lays it OVER the candles (z-index 1). The script below moves it into the plot,
+     right after the backdrop layer, so it sits behind the candles; strength comes from Settings (theme.js --tx-wm). */
+  .vela-watermark { z-index: auto !important; opacity: var(--tx-wm, 0.05) !important; }
 </style>
+<script>
+(function () {
+  const isPlot = (d) => !!d && d.querySelectorAll(":scope > canvas").length >= 4;
+  function place(wm) {
+    const par = wm.parentElement; if (!par) return;
+    if (isPlot(par)) { const bg = par.querySelector(":scope > canvas"); if (wm.previousElementSibling !== bg) bg.after(wm); return; }
+    const plot = [...par.querySelectorAll("div")].find(isPlot);
+    if (plot) plot.querySelector(":scope > canvas").after(wm);
+  }
+  let queued = false;
+  const fix = () => { queued = false; document.querySelectorAll(".vela-watermark").forEach(place); };
+  const later = () => { if (!queued) { queued = true; requestAnimationFrame(fix); } };
+  document.addEventListener("DOMContentLoaded", () => { new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); later(); });
+})();
+</script>
 <script src="vela.bundle.js"></script>
 <script src="theme.js"></script>
 <script src="lab.js"></script>

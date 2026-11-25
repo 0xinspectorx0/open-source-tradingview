@@ -35,7 +35,9 @@ function hexA(hex, a) { // "#rrggbb" + alpha -> rgba()
 window.HubSettingsLoad = () => {
   let s = {};
   try { s = JSON.parse(localStorage.getItem("chartHubTheme") || "{}"); } catch (_) {}
-  return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars };
+  // watermark = strength of the symbol name behind the candles, 0-40 (%); Vela's own default is 5.
+  const wm = Number.isFinite(+s.watermark) && s.watermark !== null && s.watermark !== "" ? Math.max(0, Math.min(40, +s.watermark)) : 5;
+  return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars, watermark: wm };
 };
 window.HubSettingsSave = (s) => { try { localStorage.setItem("chartHubTheme", JSON.stringify(s)); } catch (_) {} if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
 
@@ -51,6 +53,7 @@ window.HubThemeApply = () => {
   const st = document.documentElement.style;
   for (const k of HubThemeKeys) st.setProperty("--" + k, t[k]);
   st.setProperty("--font", t.font); st.setProperty("--mono", t.mono);
+  st.setProperty("--tx-wm", String(s.watermark / 100));   // vela.html: symbol watermark strength
   document.documentElement.style.colorScheme = t.mode;
   if (f.gf && !document.getElementById("gf-" + s.font)) {
     const l = document.createElement("link"); l.id = "gf-" + s.font; l.rel = "stylesheet";
