@@ -202,8 +202,11 @@ def patch_candles(path):
     old = "e.rect(x.bodyX,E,x.bodyW,M,T)"
     if b.count(old) != 1:
         raise SystemExit("vela.bundle.js: candle body call not found once (Vela changed?); candle patch not applied")
-    new = ("(x.bodyW>=3?(e.rect(x.bodyX+1,E+2,x.bodyW,M,[0,0,0,.42*T[3]]),"
-           "e.quad4(x.bodyX,E,__txL(T),x.bodyX+x.bodyW,E,__txD(T),x.bodyX+x.bodyW,E+M,__txD(T),x.bodyX,E+M,__txL(T)))"
+    # Look chosen in Settings > Candles (theme.js sets window.__txCandle): flat | lift | matte | matte_lift (default).
+    new = ("(x.bodyW>=3&&(window.__txCandle||'matte_lift')!=='flat'?("
+           "((window.__txCandle||'matte_lift')!=='matte'&&e.rect(x.bodyX+1,E+2,x.bodyW,M,[0,0,0,.42*T[3]])),"
+           "((window.__txCandle||'matte_lift')==='lift'?e.rect(x.bodyX,E,x.bodyW,M,T):"
+           "e.quad4(x.bodyX,E,__txL(T),x.bodyX+x.bodyW,E,__txD(T),x.bodyX+x.bodyW,E+M,__txD(T),x.bodyX,E+M,__txL(T))))"
            ":e.rect(x.bodyX,E,x.bodyW,M,T))")
     helpers = "var __txL=c=>[c[0]+(1-c[0])*.14,c[1]+(1-c[1])*.14,c[2]+(1-c[2])*.14,c[3]],__txD=c=>[c[0]*.62,c[1]*.62,c[2]*.62,c[3]];" + chr(10)
     open(path, "w", encoding="utf-8", newline=chr(10)).write(helpers + b.replace(old, new, 1))

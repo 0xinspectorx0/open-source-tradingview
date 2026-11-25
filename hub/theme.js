@@ -37,7 +37,7 @@ window.HubSettingsLoad = () => {
   try { s = JSON.parse(localStorage.getItem("chartHubTheme") || "{}"); } catch (_) {}
   // watermark = strength of the symbol name behind the candles, 0-40 (%); Vela's own default is 5.
   const wm = Number.isFinite(+s.watermark) && s.watermark !== null && s.watermark !== "" ? Math.max(0, Math.min(40, +s.watermark)) : 5;
-  return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars, watermark: wm };
+  return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars, watermark: wm, candleLook: ["flat", "lift", "matte", "matte_lift"].includes(s.candleLook) ? s.candleLook : "matte_lift" };
 };
 window.HubSettingsSave = (s) => { try { localStorage.setItem("chartHubTheme", JSON.stringify(s)); } catch (_) {} if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
 
@@ -54,6 +54,7 @@ window.HubThemeApply = () => {
   for (const k of HubThemeKeys) st.setProperty("--" + k, t[k]);
   st.setProperty("--font", t.font); st.setProperty("--mono", t.mono);
   st.setProperty("--tx-wm", String(s.watermark / 100));   // vela.html: symbol watermark strength
+  window.__txCandle = s.candleLook;   // web chart bundle: candle look (build_web.py patch_candles)
   document.documentElement.style.colorScheme = t.mode;
   if (f.gf && !document.getElementById("gf-" + s.font)) {
     const l = document.createElement("link"); l.id = "gf-" + s.font; l.rel = "stylesheet";

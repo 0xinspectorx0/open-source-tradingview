@@ -364,6 +364,13 @@ function renderSettings() {
   // Symbol watermark strength (Vela engine; it sits behind the candles). 0 = hidden, Vela default 5.
   const wl = document.createElement("label"), wr = document.createElement("input"), wv = document.createElement("span");
   wr.type = "range"; wr.min = "0"; wr.max = "40"; wr.step = "1"; wr.value = String(s.watermark); wv.textContent = s.watermark + "%";
+  if (window.TRADEX_WEB) {   // candle look (web chart only)
+    const cl = document.createElement("label"), cs2 = document.createElement("select");
+    [["matte_lift", "Matte 3D + Lift"], ["matte", "Matte 3D"], ["lift", "Lift (shadow)"], ["flat", "Flat"]].forEach(([k, t]) => cs2.add(new Option(t, k)));
+    cs2.value = s.candleLook; cl.append("Candle look", cs2); cl.title = "How candle bodies are drawn. Heikin Ashi (Chart settings > Type) uses the same look."; cs.appendChild(cl);
+    cs2.onchange = () => { HubSettingsSave({ ...HubSettingsLoad(), candleLook: cs2.value }); HubThemeApply();
+      const w = $("frame").contentWindow; if (w) w.postMessage({ cmd: "theme" }, location.origin); };
+  }
   wl.append("Symbol watermark", wr, wv); wl.title = "How strongly the symbol name shows behind the candles (Vela engine). 0 = hidden."; cs.appendChild(wl);
   wr.oninput = () => { wv.textContent = wr.value + "%"; HubSettingsSave({ ...HubSettingsLoad(), watermark: +wr.value }); HubThemeApply();
     const w = $("frame").contentWindow; if (w) w.postMessage({ cmd: "theme" }, location.origin); };
