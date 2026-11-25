@@ -120,3 +120,33 @@ revoke all on function public.tradex_is_owner(), public.tradex_new_user(), publi
   public.tradex_grant(text, text, text), public.tradex_ungrant(text), public.tradex_delete_me(text) from public, anon;
 grant execute on function public.tradex_is_owner(), public.tradex_me(), public.tradex_grant(text, text, text),
   public.tradex_ungrant(text), public.tradex_delete_me(text) to authenticated;
+
+-- Free-limit watcher (2026-11-25): one usage row per day, written by a daily Cloudflare cron through a harmless public
+-- function (it only records today's numbers, one row per day, returns nothing). Calling it also keeps the free project
+-- from pausing after a week without activity. The owner sees the rows in Account settings > Owner.
+create table if not exists public.tradex_usage (
+  day        date primary key,
+  db_bytes   bigint not null,
+  accounts   int not null,
+  active_30d int not null,
+  layouts    int not null,
+  templates  int not null,
+  at         timestamptz not null default now()
+);
+alter table public.tradex_usage enable row level security;
+drop policy if exists "owner reads usage" on public.tradex_usage;
+create policy "owner reads usage" on public.tradex_usage for select to authenticated using (public.tradex_is_owner());
+
+create or replace function public.tradex_usage_tick() returns void
+language sql security definer set search_path = public, auth as $$
+  insert into public.tradex_usage (day, db_bytes, accounts, active_30d, layouts, templates)
+  select current_date, pg_database_size(current_database()),
+         (select count(*) from auth.users),
+         (select count(*) from auth.users where last_sign_in_at > now() - interval '30 days'),
+         (select count(*) from public.tradex_docs where kind = 'layouts'),
+         (select count(*) from public.tradex_docs where kind = 'templates')
+  on conflict (day) do update set db_bytes = excluded.db_bytes, accounts = excluded.accounts, active_30d = excluded.active_30d,
+    layouts = excluded.layouts, templates = excluded.templates, at = now();
+$$;
+revoke all on function public.tradex_usage_tick() from public;
+grant execute on function public.tradex_usage_tick() to anon, authenticated;

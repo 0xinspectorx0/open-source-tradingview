@@ -122,7 +122,7 @@
   }
 
   async function ownerPanel(p) {
-    p.innerHTML = `<h4>Give a plan by email</h4><div class="card">Works for people who have not joined yet: the plan starts when they first sign in with that email.
+    p.innerHTML = `<h4>Free limits</h4><div class="card" id="gx">Loading ...</div><h4>Give a plan by email</h4><div class="card">Works for people who have not joined yet: the plan starts when they first sign in with that email.
       <div class="row"><input id="ge" type="email" placeholder="email address" style="flex:1;min-width:200px"><select id="gp"><option value="lifetime">Lifetime</option><option value="pro">Pro</option><option value="free">Free</option></select>
       <input id="gn" placeholder="note (e.g. Family)" maxlength="120" style="width:150px"><button class="b pri" id="gb">Give</button></div><div class="msg" id="gm"></div></div>
       <h4>Everyone</h4><div class="card tw" id="gu">Loading ...</div><h4>Waiting (not joined yet)</h4><div class="card tw" id="gw">Loading ...</div>`;
@@ -144,6 +144,21 @@
       p.querySelectorAll("#gw button[data-u]").forEach((b) => { b.onclick = async () => { try { await rpc("tradex_ungrant", { target_email: b.dataset.u }); lists(); } catch (err) { msg(err.message, "bad"); } }; });
     }
     lists().catch((e) => { p.querySelector("#gu").textContent = "Could not load: " + e.message; });
+    usage().catch((e) => { p.querySelector("#gx").textContent = "Could not load: " + e.message; });
+    // Free Supabase limits (checked 2026-11-25): 500 MB database, 50,000 monthly users. Numbers recorded daily by the
+    // Cloudflare job tradex-cron (tradex_installer/cf_tools/cron_worker); warning at 70%, urgent at 90%.
+    async function usage() {
+      const { data: rows } = await A.sb.from("tradex_usage").select("*").order("day", { ascending: false }).limit(1);
+      const u = (rows || [])[0], box = p.querySelector("#gx"); if (!box) return;
+      if (!u) { box.innerHTML = '<span class="dim">No numbers yet: the daily check runs at 03:17 UTC.</span>'; return; }
+      const bar = (label, val, max, fmt) => { const pc = Math.min(100, (100 * val) / max), w = pc >= 90 ? "Urgent: upgrade or clean up" : pc >= 70 ? "Warning: plan ahead" : "";
+        return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between"><span>${label}</span><span>${fmt(val)} of ${fmt(max)} (${pc.toFixed(1)}%)</span></div>
+          <div style="height:6px;border-radius:4px;background:#1c1e21;margin-top:5px;overflow:hidden"><div style="height:100%;width:${Math.max(pc, 0.8)}%;background:${pc >= 70 ? "#e8ecee" : "#797e86"}"></div></div>
+          ${w ? `<div class="dim" style="color:#e8ecee;margin-top:3px">${w}</div>` : ""}</div>`; };
+      const mb = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + " MB", n = (x) => Number(x).toLocaleString();
+      box.innerHTML = bar("Database", u.db_bytes, 500 * 1048576, mb) + bar("Signed-in users this month", u.active_30d, 50000, n) +
+        `<div class="dim" style="margin-top:6px">${n(u.accounts)} accounts, ${n(u.layouts)} layouts, ${n(u.templates)} templates. Checked ${day(u.at)} (daily).</div>`;
+    }
   }
 
   function del(p) {
