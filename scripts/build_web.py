@@ -145,25 +145,45 @@ def build():
     for f in os.listdir(os.path.join(HUB, "vendor")):
         if STATIC.match(f):
             shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
-    shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "__pycache__", "*.bak*"))
+    shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "*.sql", "__pycache__", "*.bak*"))
     head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script><script src="web/auth_web.js"></script>'
     for page in PAGES:
         p = os.path.join(OUT, page)
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())
-        if page == "index.html":                        # the web entry is the sign-in page (signed-in visitors are sent on to the chart)
-            html = '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=web/signin.html"></head><body style="background:#0a0a0b"><a href="web/signin.html" style="color:#e8ecee">Open TradeX</a></body></html>'
+        if page == "index.html":                        # the web entry = the sign-in page itself, at "/" (clean address)
+            html = root_signin()
         else:
             i = html.find("<head>")
             if i < 0:
                 raise SystemExit(f"{page}: no <head>")
             html = html[: i + 6] + head + '<meta name="viewport" content="width=device-width, initial-scale=1">' + html[i + 6:]
         open(p, "w", encoding="utf-8", newline="\n").write(html)
+    # Old sign-in address forwards to "/" (bookmarks keep working on every host).
+    open(os.path.join(OUT, "web", "signin.html"), "w", encoding="utf-8", newline="\n").write(
+        '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/' + '">'
+        '<link rel="canonical" href="/"></head><body style="background:#0a0a0b"><a href="/" style="color:#e8ecee">Open TradeX</a></body></html>')
+    # Cloudflare Pages: same headers as vercel.json + old addresses forward (Pages itself drops ".html": /hub.html -> /hub).
+    open(os.path.join(OUT, "_headers"), "w", encoding="utf-8", newline="\n").write(
+        "/web/data/*\n  Cache-Control: public, max-age=3600\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n")
+    open(os.path.join(OUT, "_redirects"), "w", encoding="utf-8", newline="\n").write(
+        "/web/signin.html / 301\n/web/signin / 301\n/index / 301\n")
+    # Unknown address: a real 404 page (Cloudflare Pages would otherwise answer every unknown path with the front page).
+    open(os.path.join(OUT, "404.html"), "w", encoding="utf-8", newline="\n").write(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>Page not found - TradeX</title><link rel="icon" type="image/png" href="/web/brand/icon-32.png"><style>'
+        'html,body{margin:0;height:100%;background:#0a0a0b;color:#b4bcbf;font:15px/1.5 "Segoe UI",system-ui,sans-serif}'
+        'main{height:100%;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}'
+        'img{width:64px;height:64px;border-radius:14px}h1{color:#e8ecee;font-size:24px;margin:18px 0 6px}'
+        'a{display:inline-block;margin-top:18px;padding:10px 22px;border-radius:10px;background:#e8ecee;color:#0a0a0b;text-decoration:none;font-weight:600}'
+        '</style></head><body><main><div><img src="/web/brand/icon-64.png" alt=""><h1>Page not found</h1>'
+        '<div>This address does not exist on TradeX.</div><a href="/hub">Open the charts</a></div></main></body></html>')
     for f in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(os.path.join(ROOT, f), os.path.join(OUT, f + (".txt" if f == "LICENSE" else "")))
     # Static-only config for `cd web_dist && vercel deploy` (no build there; headers same as the repo's vercel.json).
     cfg = json.load(open(os.path.join(ROOT, "vercel.json")))
     for k in ("buildCommand", "outputDirectory", "installCommand"):
         cfg.pop(k, None)
+    cfg["cleanUrls"] = True                             # same clean addresses as Cloudflare: /hub, no ".html"
     json.dump(cfg, open(os.path.join(OUT, "vercel.json"), "w"), indent=2)
     hits = scan(OUT)
     if hits:
@@ -171,6 +191,21 @@ def build():
         raise SystemExit(1)
     n = sum(len(fs) for _, _, fs in os.walk(OUT))
     print(f"web_dist: {n} files, personal-data scan clean")
+
+
+def root_signin():
+    """hub/web/signin.html rewritten to be served at the site root "/" (its files stay under web/)."""
+    s = open(os.path.join(WEB, "signin.html"), encoding="utf-8").read()
+    for a, b in (('"brand/', '"web/brand/'), ('"../hub.html"', '"/hub"'),   # '"brand/' also covers url("brand/
+                 ('"auth_config.json"', '"web/auth_config.json"'), ('src="glitch.js"', 'src="web/glitch.js"'),
+                 ('location.origin + "/hub.html"', 'location.origin + "/hub"')):
+        if a not in s:
+            raise SystemExit(f"signin.html: expected {a!r} (root sign-in rewrite)")
+        s = s.replace(a, b)
+    left = [x for x in ('"brand/', '../hub.html', '"auth_config.json"', '"glitch.js"') if x in s]
+    if left:
+        raise SystemExit(f"signin.html: paths not rewritten for the root page: {left}")
+    return s
 
 
 if __name__ == "__main__":

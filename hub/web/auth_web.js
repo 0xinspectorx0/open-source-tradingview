@@ -48,22 +48,20 @@
   function closeMenu() { if (menu) { menu.remove(); menu = null; } }
   function openMenu() {
     closeMenu();
-    const u = A.user; if (!u) { location.href = "web/signin.html"; return; }
+    const u = A.user; if (!u) { location.href = "/"; return; }
     const pic = u.user_metadata && u.user_metadata.avatar_url, nLocal = localRows().length;
     menu = document.createElement("div"); menu.id = "txauthm";
     menu.innerHTML = `<div class="hd"><span class="big">${pic ? `<img src="${esc(pic)}" alt="">` : esc(nameOf(u).slice(0, 1).toUpperCase())}</span>
       <div><div class="nm">${esc(nameOf(u))}</div><div class="em">${esc(u.email || "")}</div></div></div>
       <div class="note">Your layouts and indicator templates are saved to this account.</div>
       ${nLocal ? `<button class="row" data-a="import">Copy ${nLocal} item${nLocal === 1 ? "" : "s"} saved in this browser as a guest into your account</button>` : ""}
-      <button class="row" data-a="settings">Settings and theme</button>
+      <button class="row" data-a="account">Account settings</button>
+      <button class="row" data-a="settings">Theme and colours</button>
       <button class="row" data-a="out">Sign out</button>`;
     menu.onclick = async (e) => {
       const b = e.target.closest("button[data-a]"); if (!b) return;
-      if (b.dataset.a === "out") {
-        await sb.auth.signOut();
-        try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {}   // the guest must not inherit the account's layout pointer
-        closeMenu(); location.href = "web/signin.html"; return;
-      }
+      if (b.dataset.a === "out") { closeMenu(); A.signOut(); return; }
+      if (b.dataset.a === "account") { closeMenu(); openAccount(); return; }
       if (b.dataset.a === "import") {
         b.disabled = true; b.textContent = "Copying ...";
         try { const n = await importLocal(); b.textContent = `Copied ${n}. Open the Layouts menu to see them.`; if (window.layoutsRefresh) window.layoutsRefresh(); }
@@ -115,6 +113,19 @@
     for (const kind of ["layouts", "templates"]) for (const [id, v] of Object.entries(local[kind] || {})) rows.push({ user_id: A.user.id, kind, id, name: v.name || "Untitled", saved_at: v.saved_at || 0, summary: v.summary || "", doc: v.doc || {} });
     return rows;
   };
+  A.importLocal = () => importLocal();
+  A.localCount = () => localRows().length;
+  A.signOut = async () => {
+    await sb.auth.signOut().catch(() => {});
+    try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {}   // the guest must not inherit the account's layout pointer
+    location.href = "/";
+  };
+  // Account settings window (web/account_web.js, loaded on first use).
+  function openAccount(section) {
+    if (window.TXAccount) return window.TXAccount.open(section);
+    const s = document.createElement("script"); s.src = "web/account_web.js"; s.onload = () => window.TXAccount && window.TXAccount.open(section); document.head.appendChild(s);
+  }
+  A.openAccount = openAccount;
   async function importLocal() {
     const rows = localRows(); if (!rows.length) return 0;
     const { error } = await sb.from(T).upsert(rows, { onConflict: "user_id,kind,id", ignoreDuplicates: true });
@@ -132,16 +143,26 @@
     if (!A.providers.length) return;
     await new Promise((res, rej) => { const s = document.createElement("script"); s.src = SDK; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
     sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
+    A.sb = sb;
     btn = document.createElement("button"); btn.id = "txauth"; btn.onclick = () => (menu ? closeMenu() : openMenu());
     const app = document.getElementById("app"); if (app) app.appendChild(btn);
     sb.auth.onAuthStateChange((ev, session) => {
       const was = A.user && A.user.id; A.user = session ? session.user : null; busy = ""; paint();
       // Session ended under us (expired, signed out in another tab): back to the sign-in page, so later saves can
       // never fall into guest storage silently.
-      if (was && !A.user && ev === "SIGNED_OUT") { try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {} location.href = "web/signin.html"; return; }
+      if (was && !A.user && ev === "SIGNED_OUT") { try { localStorage.removeItem("chartHubLayoutId"); } catch (_) {} location.href = "/"; return; }
       if (A.ready && (A.user && A.user.id) !== was && window.layoutsRefresh) window.layoutsRefresh();
     });
     const { data } = await sb.auth.getSession(); A.user = data.session ? data.session.user : null; paint();
+    // Sign-in glitch WITH sound EVERY time a signed-in person opens the chart (Saifullah 2026-11-25). Browsers allow
+    // sound only after a click, so web/glitch.js shows an "Enter TradeX" screen whose click plays it (skipped where the
+    // browser already allows sound). Skipped if it played in this tab in the last 60 s (the sign-in click just did).
+    let recent = 0; try { recent = +sessionStorage.getItem("txFxAt") || 0; } catch (_) {}
+    if (A.user && Date.now() - recent > 60000) {
+      const first = String(nameOf(A.user)).split(" ")[0], s = document.createElement("script"); s.src = "web/glitch.js";
+      s.onload = () => window.TXGlitch && TXGlitch.enter({ name: first.includes("@") ? "" : first });
+      document.head.appendChild(s);
+    }
   }
   const run = () => start().catch((e) => { A.failed = true; console.warn("sign-in off:", e); }).finally(() => { A.ready = true; readyRes(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);

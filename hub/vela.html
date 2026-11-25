@@ -139,15 +139,29 @@ if (LabEmbedded && VelaLab.registerWidgetAction) {
 // ---- Theme (TradeX settings) ----
 // hexA() comes from theme.js
 function velaTheme() { const t = HubTheme; return { background: t.bg, textColor: t.text, gridColor: t.grid, borderColor: t.line, upColor: t.up, downColor: t.down, fontFamily: t.font }; }
-// Candle colours have one home: the hub's Settings panel. Inside the hub, Vela's own dialog hides its colour rows.
-const CANDLE_COLOUR_ROWS = ["symbol.style.candles.body", "symbol.style.candles.borders", "symbol.style.candles.wick", "symbol.style.bars.up-color", "symbol.style.bars.down-color"];
+// Candle colours: one saved value (TradeX Settings, theme overrides "up"/"down"), editable in TWO places that stay in
+// step (2026-11-25): the Settings panel on the right and Vela's own Chart settings (Symbol > Candles body / bar colours).
+// Border and wick rows stay hidden: they always follow the body colours.
+const CANDLE_COLOUR_ROWS = ["symbol.style.candles.borders", "symbol.style.candles.wick"];
+let resettingColours = 0;
 function guardCandleColours(chart) {
   if (!LabEmbedded || chart.hubGuarded) return;
   chart.hubGuarded = true;
   try { chart.renderer.setSettingsVisibility({ hidden: CANDLE_COLOUR_ROWS }); } catch (e) { console.warn("settings rows", e); }
-  // Vela's "Reset defaults" must not pull the candles away from the hub's colours.
-  try { chart.renderer.onConfigChanged(() => { const c = chart.renderer.getConfig().candles; if (c && (c.upColor !== HubTheme.up || c.downColor !== HubTheme.down)) colorChart(chart); }); } catch (e) { console.warn("config guard", e); }
+  try { chart.renderer.onConfigChanged(() => {
+    const cfg = chart.renderer.getConfig(), c = cfg.candles || {}, b = cfg.bars || {};
+    let up = c.upColor, down = c.downColor;
+    if (b.upColor && b.upColor !== HubTheme.up && up === HubTheme.up) up = b.upColor;
+    if (b.downColor && b.downColor !== HubTheme.down && down === HubTheme.down) down = b.downColor;
+    if ((!up || up === HubTheme.up) && (!down || down === HubTheme.down)) return;
+    const cur = HubSettingsLoad();
+    if (Date.now() - resettingColours < 1500) { delete cur.overrides.up; delete cur.overrides.down; }   // Vela "Reset defaults" = back to the theme
+    else { if (up) cur.overrides.up = up.slice(0, 7); if (down) cur.overrides.down = down.slice(0, 7); }
+    HubSettingsSave(cur); HubThemeApply(); applyTheme();   // every chart in the grid
+    try { parent.postMessage({ evt: "theme:changed" }, location.origin); } catch (_) {}
+  }); } catch (e) { console.warn("config guard", e); }
 }
+document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest(".vela-dialog--settings .vela-sd-btn"); if (b) resettingColours = Date.now(); }, true);
 function colorChart(chart) {
   const t = HubTheme;
   guardCandleColours(chart);

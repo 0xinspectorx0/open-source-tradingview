@@ -48,7 +48,11 @@ async function loadCat(sec, chip) {
   const k = sec + ":" + chip; if (CAT[k]) return CAT[k];
   let rows = [];
   if (sec === "vela") {
-    const r = await ask("native:list");
+    // The chart may still be loading when the dialog opens: Vela then answers with an empty list. Ask again a few
+    // times, and never keep an empty answer (it used to stay empty for the whole visit, 2026-11-25).
+    let r = await ask("native:list");
+    for (let i = 0; i < 8 && st.engine === "vela" && r.ok && !(r.list || []).length; i++) { await new Promise((d) => setTimeout(d, 1000)); r = await ask("native:list"); }
+    if (r.ok && !(r.list || []).length) r = { ok: false, list: [], error: "The chart is still loading. Close and open this panel again in a moment." };
     rows = (r.list || []).map((n) => ({ src: "vela", id: "vela:" + n.type, type: n.type, name: n.title, sub: "Vela built-in, computed natively", open: n.supported, kind: "indicator", beta: n.beta, present: n.present, multi: n.multi }));
     if (!r.ok) rows.err = st.engine === "vela" ? (r.error || "Vela did not answer") : "Vela native indicators need the Vela engine.";
   } else {

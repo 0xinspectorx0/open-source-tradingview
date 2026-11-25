@@ -65,6 +65,7 @@
   <a class="guest" href="../hub.html">Continue without an account</a>
   <p class="fine">New here? The same button creates your free account.<br>No passwords. TradeX stores only your account id, email and saved layouts.</p>
 </div></main>
+<script src="glitch.js"></script>
 <script>
 // ---- Live candles behind the page (same idea as the waitlist background, in the TradeX brand colours). ----
 (function () {
@@ -131,6 +132,9 @@
   if (!reduce) requestAnimationFrame(frame);
 })();
 
+// Preview of the sign-in glitch without signing in: open signin.html#fx and click anywhere.
+if (location.hash === "#fx") addEventListener("click", (e) => { if (!e.target.closest("button,a") && window.TXGlitch) TXGlitch.play(); });
+
 // ---- Sign in (Supabase; only the methods switched on in Supabase are offered). ----
 (async function () {
   requestAnimationFrame(() => { document.getElementById("portrait").classList.add("on"); document.getElementById("card").classList.add("on"); });
@@ -152,11 +156,14 @@
     document.querySelector("#card h1").textContent = "Welcome back" + (name ? ", " + name : "");
     document.querySelector("#card .sub").textContent = "Opening your charts ...";
     box.innerHTML = ""; document.querySelectorAll("#card .or, #card .guest, #card .fine").forEach((x) => (x.hidden = true));
-    setTimeout(() => location.replace("../hub.html"), 1400); return;
+    setTimeout(() => location.replace("../hub.html"), 1400); return;   // the chart page plays the glitch (Enter screen = sound)
   }
   box.onclick = async (e) => {
     const b = e.target.closest("button[data-p]"); if (!b) return;
     box.querySelectorAll("button").forEach((x) => (x.disabled = true)); b.lastChild.textContent = "Opening " + NAMES[b.dataset.p] + "..."; err.textContent = "";
+    // Sign-in glitch: sound + screen tear on the click (the only moment browsers allow sound); the chart page plays the
+    // screen part again when the person lands back signed in (flag in this tab's sessionStorage).
+    if (window.TXGlitch) await TXGlitch.play({ ms: 700 });
     const { error } = await sb.auth.signInWithOAuth({ provider: b.dataset.p, options: { redirectTo: location.origin + "/hub.html" } });
     if (error) { err.textContent = "Sign-in could not start: " + error.message; box.querySelectorAll("button[data-p]").forEach((x) => (x.disabled = false)); }
   };

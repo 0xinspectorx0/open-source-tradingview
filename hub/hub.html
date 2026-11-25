@@ -372,6 +372,8 @@ function renderSettings() {
   r.onclick = () => { HubSettingsSave({ ...HubSettingsLoad(), overrides: {} }); themeChanged(); }; ui.appendChild(r);
 }
 let openPanel = null;
+// Candle colours changed inside a chart's own Chart settings: same saved theme, refresh here (2026-11-25).
+addEventListener("message", (e) => { if (e.origin === location.origin && e.data && e.data.evt === "theme:changed") { HubThemeApply(); if (openPanel === "settings") renderSettings(); if (window.layoutsDirty) window.layoutsDirty(); } });
 function renderFeeds() {
   const d = $("dock"); d.innerHTML = "<h3>Feeds</h3>";
   DATA.brokers.forEach((b) => { const s = status[b.id] || {}, r = document.createElement("div"); r.className = "row";
