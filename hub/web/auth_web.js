@@ -79,12 +79,27 @@
 
   // ---- cloud layouts: same answers as the desktop /api/layouts (hub/layouts_store.py) ----
   const T = "tradex_docs";
+  // Layouts are stored gzip-compressed ({z: base64}) to stretch the free 500 MB database about 5x (2026-11-25).
+  // Rows saved before that are plain JSON and still load. Browsers without CompressionStream save plain JSON.
+  const pack = async (doc) => {
+    if (typeof CompressionStream === "undefined") return doc;
+    const raw = new Blob([JSON.stringify(doc)]).stream().pipeThrough(new CompressionStream("gzip"));
+    const b = new Uint8Array(await new Response(raw).arrayBuffer()); let bin = "";
+    for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+    return { z: btoa(bin) };
+  };
+  const unpack = async (doc) => {
+    if (!doc || typeof doc.z !== "string") return doc;
+    const b = Uint8Array.from(atob(doc.z), (c) => c.charCodeAt(0));
+    return JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+  };
   A.layouts = async function (path, q, body) {
     const uid = A.user.id, json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json" } });
     if (path === "/api/layouts" || path === "/api/layouts/") {
       if (q.get("id")) {
         const { data, error } = await sb.from(T).select("name,saved_at,summary,doc").eq("kind", q.get("kind") || "layouts").eq("id", q.get("id")).maybeSingle();
         if (error) return json({ error: error.message }, 502);
+        if (data) data.doc = await unpack(data.doc);
         return data ? json(data) : json({ error: "not found" }, 404);
       }
       const { data, error } = await sb.from(T).select("kind,id,name,saved_at,summary").order("saved_at", { ascending: false });
@@ -99,7 +114,7 @@
       if (!req.doc || typeof req.doc !== "object") return json({ error: "doc must be an object" }, 400);
       const id = String(req.id || "") || Math.random().toString(36).slice(2, 14);
       const { error } = await sb.from(T).upsert({ user_id: uid, kind, id, name: String(req.name || "").trim().slice(0, 60) || "Untitled",
-        saved_at: Math.floor(Date.now() / 1000), summary: String(req.summary || "").slice(0, 120), doc: req.doc });
+        saved_at: Math.floor(Date.now() / 1000), summary: String(req.summary || "").slice(0, 120), doc: await pack(req.doc) });
       return error ? json({ error: "could not save to your account: " + error.message }, 502) : json({ ok: true, id });
     }
     return json({ error: "not found" }, 404);

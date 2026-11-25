@@ -150,3 +150,21 @@ language sql security definer set search_path = public, auth as $$
 $$;
 revoke all on function public.tradex_usage_tick() from public;
 grant execute on function public.tradex_usage_tick() to anon, authenticated;
+
+-- Saved-item cap per account (2026-11-25), protects the free 500 MB database: Free 30 layouts / 50 templates,
+-- Pro and Lifetime 200 each, owner unlimited. Only NEW items count (saving over an existing one is always allowed).
+create or replace function public.tradex_docs_cap() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare pr public.tradex_profiles; lim int; n int;
+begin
+  select * into pr from public.tradex_profiles where user_id = new.user_id;
+  if pr.role = 'owner' then return new; end if;
+  -- upsert over an item that already exists (autosave) is not a new item
+  if exists (select 1 from public.tradex_docs where user_id = new.user_id and kind = new.kind and id = new.id) then return new; end if;
+  lim := case when coalesce(pr.plan, 'free') in ('pro', 'lifetime') then 200 when new.kind = 'templates' then 50 else 30 end;
+  select count(*) into n from public.tradex_docs where user_id = new.user_id and kind = new.kind;
+  if n >= lim then raise exception 'limit reached: % saved % on your plan; delete one to save a new one', lim, new.kind; end if;
+  return new;
+end $$;
+drop trigger if exists tradex_docs_cap on public.tradex_docs;
+create trigger tradex_docs_cap before insert on public.tradex_docs for each row execute function public.tradex_docs_cap();
