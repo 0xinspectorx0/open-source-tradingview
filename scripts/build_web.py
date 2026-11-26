@@ -152,7 +152,7 @@ def build():
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())
         if page == "index.html":                        # the web entry opens the app directly (no sign-in)
             html = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
-                    '<meta http-equiv="refresh" content="0; url=/hub">'
+                    '<meta http-equiv="refresh" content="0; url=/hub.html">'
                     '<title>TradeX</title></head><body style="background:#0a0a0b"></body></html>')
         else:
             i = html.find("<head>")
@@ -163,13 +163,13 @@ def build():
     patch_candles(os.path.join(OUT, "vela.bundle.js"))
     # Old sign-in address forwards to the app (bookmarks keep working on every host).
     open(os.path.join(OUT, "web", "signin.html"), "w", encoding="utf-8", newline="\n").write(
-        '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/hub">'
-        '<link rel="canonical" href="/hub"></head><body style="background:#0a0a0b"><a href="/hub" style="color:#e8ecee">Open TradeX</a></body></html>')
+        '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/hub.html">'
+        '<link rel="canonical" href="/hub.html"></head><body style="background:#0a0a0b"><a href="/hub.html" style="color:#e8ecee">Open TradeX</a></body></html>')
     # Cloudflare Pages: same headers as vercel.json + old addresses forward (Pages itself drops ".html": /hub.html -> /hub).
     open(os.path.join(OUT, "_headers"), "w", encoding="utf-8", newline="\n").write(
         "/web/data/*\n  Cache-Control: public, max-age=3600\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n")
     open(os.path.join(OUT, "_redirects"), "w", encoding="utf-8", newline="\n").write(
-        "/web/signin.html /hub 301\n/web/signin /hub 301\n/index /hub 301\n")
+        "/web/signin.html /hub.html 301\n/web/signin /hub.html 301\n/index /hub.html 301\n")
     # Unknown address: a real 404 page (Cloudflare Pages would otherwise answer every unknown path with the front page).
     open(os.path.join(OUT, "404.html"), "w", encoding="utf-8", newline="\n").write(
         '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -179,7 +179,7 @@ def build():
         'img{width:64px;height:64px;border-radius:14px}h1{color:#e8ecee;font-size:24px;margin:18px 0 6px}'
         'a{display:inline-block;margin-top:18px;padding:10px 22px;border-radius:10px;background:#e8ecee;color:#0a0a0b;text-decoration:none;font-weight:600}'
         '</style></head><body><main><div><img src="/web/brand/icon-64.png" alt=""><h1>Page not found</h1>'
-        '<div>This address does not exist on TradeX.</div><a href="/hub">Open the charts</a></div></main></body></html>')
+        '<div>This address does not exist on TradeX.</div><a href="/hub.html">Open the charts</a></div></main></body></html>')
     for f in ("LICENSE", "THIRD_PARTY_NOTICES.md", "NOTICE", "TRADEMARK.md"):
         if os.path.isfile(os.path.join(ROOT, f)):
             shutil.copy2(os.path.join(ROOT, f), os.path.join(OUT, f + (".txt" if f in ("LICENSE", "NOTICE") else "")))
