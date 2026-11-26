@@ -97,6 +97,11 @@ async function mount(mobile = false, oldState = null) {
   const toggle = title => section(title).querySelector('summary').click();
   assert.equal(d.querySelectorAll('#dock details.set[open]').length,0, 'settings start collapsed');
   toggle('Tema'); assert.equal(section('Tema').open,true);
+  [...section('Tema').querySelectorAll('.presets button')].find(x=>x.textContent==='Açık (beyaz)').click();
+  assert.equal(d.documentElement.style.getPropertyValue('--tx-ohlc-color'),'#00332a');
+  assert.equal(section('Tema').open,true);
+  [...section('Tema').querySelectorAll('.presets button')].find(x=>x.textContent==='Tam siyah').click();
+  assert.equal(d.documentElement.style.getPropertyValue('--tx-ohlc-color'),'#fffdd0');
   toggle('Mum gövdesi'); assert.equal(section('Tema').open,false); assert.equal(section('Mum gövdesi').open,true);
   toggle('Mum gövdesi'); assert.equal(d.querySelectorAll('#dock details.set[open]').length,0);
   toggle('Mum gövdesi');

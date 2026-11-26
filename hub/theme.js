@@ -64,6 +64,8 @@ window.HubThemeApply = () => {
   const st = document.documentElement.style;
   for (const k of HubThemeKeys) st.setProperty("--" + k, t[k]);
   st.setProperty("--font", t.font); st.setProperty("--mono", t.mono);
+  // OHLC text is independent of candle direction, custom candle colours and opacity.
+  st.setProperty("--tx-ohlc-color", t.mode === "light" ? "#00332a" : "#fffdd0");
   st.setProperty("--tx-wm", String(s.watermark / 100));   // vela.html: symbol watermark strength
   window.__txCandle = s.candleLook;   // web chart bundle: candle look (build_web.py patch_candles)
   window.__txWickWidth = s.candleStyle.wickWidth; // Vela bundle's candle geometry (CSS px)

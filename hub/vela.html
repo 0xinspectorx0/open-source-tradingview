@@ -28,6 +28,17 @@
   /* Symbol watermark (2026-11-25): Vela lays it OVER the candles (z-index 1). The script below moves it into the plot,
      right after the backdrop layer, so it sits behind the candles; strength comes from Settings (theme.js --tx-wm). */
   .vela-watermark { z-index: auto !important; opacity: var(--tx-wm, 0.05) !important; }
+  /* Vela inks each OHLC value inline using candle colours; fix only the OHLC labels and values. */
+  .vela-statusline .vela-sl-ohlc, .vela-statusline .vela-sl-ohlc b { color: var(--tx-ohlc-color) !important; }
+  /* Transparent pane controls with outlined buttons, including their active/hover states. */
+  #chart div:has(> .vela-pc-btn) { background:transparent !important; }
+  #chart .vela-pc-btn, #chart .vela-pc-btn:not(:disabled):hover, #chart .vela-pc-on, #chart .vela-pc-on:not(:disabled):hover {
+    background:transparent !important; border:1px solid var(--vela-fg-muted) !important; color:var(--vela-fg-bright) !important;
+  }
+  #chart .vela-pc-btn svg { stroke-width:2.2; }
+  #chart .vela-pc-btn:focus-visible { outline:2px solid var(--vela-focus); outline-offset:2px; }
+  /* Embedded toolbar controls are mirrored in the TradeX bar; the standalone toolbar stays intact. */
+  html.embed #chart .vela-widget-topbar { display:none !important; }
   /* The parent shell already provides symbol and timeframe controls. Keep the other mobile tools. */
   html.embed [data-layout="mobile"] .vela-mb-symbol,
   html.embed [data-layout="mobile"] .vela-mb-tf { display:none !important; }
@@ -379,6 +390,11 @@ function addCodeTrendline() {
 document.getElementById("auto").onclick = addCodeTrendline;
 window.labChart = {
   name: "vela",
+  // Shared toolbar reads the active cell at the point of use, including registered plugin styles.
+  // Vela's own picker supplies the exact localized built-in and registered plugin styles.
+  priceStyles: () => ws.topbar.styleItems().map(({ id, label }) => ({ id, label })),
+  priceStyle: () => ws.active.priceStyle,
+  setPriceStyle: (id) => ws.active.setPriceStyle(id),
   // Switch in place: indicators re-run on the new bars; panes, drawings and settings stay.
   // Layout in place (cells keep their state); new cells get the theme colours.
   setLayout: (layout) => { document.getElementById("layout").value = layout || ""; if (ws.setLayout) { ws.setLayout(layout || "1"); setTimeout(applyTheme, 1500); } else build(layout || ""); },

@@ -118,7 +118,11 @@ Open **Settings** (gear on the right), then expand a section to set rising/falli
 choose wick thickness and adjust each colour's opacity from 0% to 100%. These settings are saved in the browser
 and apply to all Vela charts; the candle reset restores full opacity. Pine scripts allowed to recolour candles can
 override the body colour and its opacity. The chart's display labels use the market name and the actual feed name; the
-internal ticker used to request data is unchanged.
+internal ticker used to request data is unchanged. OHLC labels and values use a fixed dark green in the light theme
+and cream in dark themes, independent of candle colours; the adjacent price change retains its directional colour.
+Price and indicator pane controls use transparent, outlined buttons with thicker icons. In the TradeX shell,
+chart type, indicators, undo/redo, Vela panels and screenshot share the main top bar with market, timeframe and layout.
+The bar scrolls horizontally on narrow screens; the standalone Vela page retains its own toolbar.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
 to add the current market or **+ Ara** to search. Choose an entry to open its exact source and market, or remove it
