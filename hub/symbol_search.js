@@ -5,7 +5,7 @@
 // paging as you scroll. A row click opens it at the current broker when offered; a broker tag opens it there.
 // Picking still goes through the hub's st + push(), so broker memory, variants, layouts and the cover all work.
 (function () {
-  const TYPE = { stock: "stock", fund: "fund", forex: "forex", crypto: "crypto", index: "index", commodity: "commodity" };
+  const TYPE = { stock: "stock", fund: "fund", forex: "forex", crypto: "crypto", index: "index", commodity: "commodity", futures: "futures" };
   const CUR = { USD: "$", EUR: "€", GBP: "£", JPY: "¥", CHF: "Fr", AUD: "A$", CAD: "C$", NZD: "N$", CNH: "¥", HKD: "HK", SGD: "S$", ZAR: "R", MXN: "M$", TRY: "₺", SEK: "kr", NOK: "kr", DKK: "kr", PLN: "zł", INR: "₹" };
   const METAL = { XAU: ["Au", "#b8902c"], XAG: ["Ag", "#8c9196"], XPT: ["Pt", "#7d8a92"], XPD: ["Pd", "#8a8378"], XCU: ["Cu", "#b06a3b"], XAL: ["Al", "#86909a"], XNI: ["Ni", "#7f8a7a"], XPB: ["Pb", "#6f7480"], XZN: ["Zn", "#80868c"] };
   const PAGE = 60, RECENT_KEY = "tradexRecentSymbols", PREF_KEY = "tradexSymSearch";

@@ -81,7 +81,7 @@
   function status() {
     F.probeAll();
     const out = {};
-    for (const id of Object.keys(F.feeds)) { const h = F.health[id] || {}; out[id] = { ok: !!h.ok, msg: h.ok ? "answering from your browser" : h.msg || "checking ..." }; }
+    for (const id of Object.keys(F.feeds)) { const h = F.health[id] || {}; out[id] = { ok: !!h.ok, msg: h.ok ? (id === "bist" ? "Delayed Yahoo reference data via server" : "answering from your browser") : h.msg || "checking ..." }; }
     return out;
   }
 

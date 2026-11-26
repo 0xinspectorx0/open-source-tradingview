@@ -208,12 +208,34 @@
     live(t, tf, onBar) { return pollLive(okx, t, tf, onBar); },
   };
 
-  const feeds = { binance, bybit, deriv, coinbase, kraken, okx };
+  // BIST is delayed reference data, proxied by the optional same-origin Pages Function.
+  // A plain static host does not provide this endpoint; never silently substitute another market.
+  const bist = {
+    async history(t, tf, limit = 1000, toMs) {
+      const q = new URLSearchParams({ symbol: t, tf, limit: String(Math.max(1, Math.min(5000, Math.floor(limit)))) });
+      if (toMs) q.set("to", String(Math.floor(toMs)));
+      let r, rows;
+      try {
+        r = await fetch(`/market-data/bist?${q}`);
+        rows = await r.json();
+      } catch (_) { mark("bist", false, "BIST server endpoint unavailable"); throw new Error("BIST server endpoint unavailable"); }
+      if (!r.ok || !Array.isArray(rows)) {
+        const msg = rows.error || "BIST server endpoint unavailable";
+        mark("bist", false, msg); throw new Error(msg);
+      }
+      mark("bist", true, "Delayed Yahoo reference data");
+      return rows;
+    },
+    live(t, tf, onBar) { return pollLive(bist, t, tf, onBar, 60000); },
+  };
+
+  const feeds = { binance, bybit, deriv, coinbase, kraken, okx, bist };
   // Status lights: one cheap check per feed at start, then whatever the charts saw last.
   const PROBE = {
     binance: () => binance.history("BTCUSD", "M1", 1), bybit: () => bybit.history("BYBIT_BTCUSDT", "M1", 1),
     deriv: () => deriv.history("frxEURUSD", "M1", 1), coinbase: () => coinbase.history("CB_BTC-USD", "D1", 1),
     kraken: () => kraken.history("KRK_XBTUSD", "D1", 1), okx: () => okxRows("candles", "BTC-USDT", "D1", 1).then(() => mark("okx", true, "ok")),
+    bist: () => bist.history("BIST_THYAO", "D1", 5),
   };
   function probeAll() { for (const [id, f] of Object.entries(PROBE)) if (!health[id]) { health[id] = { ok: false, msg: "checking ...", at: 0 }; f().catch(() => {}); } }
   window.TXWebFeeds = { feeds, health, probeAll, SEC };

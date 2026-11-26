@@ -7,8 +7,8 @@ problem. Intraday bars (1m/5m/15m/30m/60m) cover the last ~60 days; daily bars
 go back years. Prices are delayed reference prices, not a live order book.
 
 This plugin is server-side only (the Vela/Lightweight/KLineChart engines and the
-desktop hub). The web build (Vercel/Cloudflare) fetches from the browser, where
-Yahoo does not send CORS headers, so BIST is not in the pre-built web lists.
+desktop hub). The web build uses a separate optional Cloudflare Pages Function
+because Yahoo does not send CORS headers; see docs/WEB_BETA.md.
 """
 import csv
 import os

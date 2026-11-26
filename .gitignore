@@ -40,3 +40,4 @@ Thumbs.db
 # web beta build output (scripts/build_web.py)
 /web_dist/
 /.vercel/
+/.wrangler/
