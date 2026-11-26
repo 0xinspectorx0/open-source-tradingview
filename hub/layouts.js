@@ -65,6 +65,8 @@
     if (!ready || (typeof pending !== "undefined" && pending)) return { ok: false, error: "Grafik yükleniyor; lütfen tamamlanınca tekrar deneyin." };
     return saveNow(false, undefined, true);
   };
+  window.layoutsCurrentId = () => curId;
+  window.layoutsSyncAllowed = () => ready && !backupBusy && !backupImported && !layoutOperations && !(typeof pending !== "undefined" && pending);
   window.layoutsReady = () => ready;   // alerts_dialog.js: no drawing checks while a layout is being put back     // hub + indicator code call this on any change
 
   const backup = TradeXSettingsBackup.create({api, storage:localStorage, currentId:()=>curId, currentName:()=>curName,
@@ -105,7 +107,7 @@
       let chart = lastChartDoc;
       if (full || !chart) { const d = await api("?kind=layouts&id=" + encodeURIComponent(curId)); curName = d.name; chart = d.doc && d.doc.chart; if (full && d.doc && d.doc.grid) $("layout").value = d.doc.grid; }
       if (!chart) return;
-      const r = await ask("doc:apply", { doc: full ? chart : { drawBook: chart.drawBook } }, 8000);
+      const r = await ask("doc:apply", { doc: full ? chart : { drawBook: chart.drawBook, baseline: chart.baseline } }, 8000);
       if (!r.ok) console.warn("layout apply", r.error);
       paintButton();
     } catch (e) { console.warn("layout restore", e); }

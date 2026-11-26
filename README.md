@@ -127,7 +127,20 @@ are saved in the browser independently of layouts. The chart-type icon opens the
 indicator-template menu is labelled **Şablonlar**. The bar scrolls horizontally on narrow screens; the standalone
 Vela page retains its own toolbar. The embedded chart settings dialog has a **Kaydet** button that explicitly saves
 all current chart settings and the rest of the active layout, even when layout autosave is off. Settings still apply
-live; the dialog reports an error if the chart is loading or saving fails. Malformed Pine alerts with an object title and no message are forwarded as events
+live; the dialog reports an error if the chart is loading or saving fails. **Varsayılan olarak ayarla** saves the active
+chart's appearance and timezone as defaults for newly created charts. Existing saved layout settings take precedence;
+markets, indicators and drawings are not part of the defaults. Defaults are browser-local and included in JSON backups.
+
+Indicators (including their inputs, visibility and removal) are mirrored between cells in a multi-chart layout. Drawings
+are mirrored only between cells showing the same exact ticker, so a drawing cannot accidentally appear on another market.
+Open tabs/windows on the same origin and the same saved layout also exchange indicator changes and per-ticker drawings
+live via BroadcastChannel. Different saved layouts and different browsers/devices are not linked. Concurrent edits use
+last received state, so avoid editing the same drawing simultaneously in two windows; receiving a drawing update may
+clear the receiving chart's drawing undo history. Synchronization does not change each window's market or timeframe.
+Drawing documents retain Vela's pane IDs; drawings on indicator subpanes may not display in a different window if its
+pane IDs differ. The browser must support BroadcastChannel for cross-window synchronization.
+
+Malformed Pine alerts with an object title and no message are forwarded as events
 but do not produce the repeated `[object Object]` notification bubble; meaningful alerts and errors remain visible.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**

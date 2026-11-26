@@ -4,7 +4,7 @@ let INDS = []; try { INDS = JSON.parse(localStorage.getItem("chartHubIndicators"
 let FAVS = []; try { FAVS = JSON.parse(localStorage.getItem("chartHubFavs") || "[]"); } catch (_) {}         // starred rows
 let MINE = []; try { MINE = JSON.parse(localStorage.getItem("chartHubScripts") || "[]"); } catch (_) {}      // own Pine scripts
 const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
-const saveInds = () => { keep("chartHubIndicators", INDS); if (window.layoutsDirty) window.layoutsDirty(); };  // layouts.js autosave
+const saveInds = (broadcast = true) => { keep("chartHubIndicators", INDS); if (window.layoutsDirty) window.layoutsDirty(); if (broadcast && window.TradeXSync) window.TradeXSync.indicatorsChanged(); };  // layouts.js autosave
 // Order-flow views moved to the chart-type menu (Volume footprint, Session volume profile), 2026-11-12. The first version
 // switched two indicators on by itself (Delta pane, SVP indicator); take those auto-added ones off once. Both stay
 // available in Indicators > Vela native for anyone who wants them.
@@ -17,7 +17,7 @@ try {
 // Before 2026-11-15 a visit to the Lightweight or KLineChart engine switched every Pine indicator off with this error. Turn them back on.
 INDS.forEach((x) => { if (x.err && /run on Vela for now|Vela only/i.test(x.err)) { x.err = null; x.on = true; } });
 INDS.forEach((x) => { if (x.err && /Unsupported Pine Script version|version 4 not supported/i.test(x.err)) { x.err = null; x.on = true; } });  // old v4 failures: the converter handles them now
-let liveIds = {}, busy = {}, reapply = false;
+let liveIds = {}, busy = {}, reapply = false, indicatorGeneration = 0, indicatorRequests = {};
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function frameWin() { return $("frame").contentWindow; }
 
@@ -52,19 +52,22 @@ async function pineAdd(ind, auto) {
   }
   ind.wait = false;
   busy[ind.key] = true; indChanged();
-  if (ind.kind === "native") { const r = await ask("native:add", { type: ind.type, inputs: ind.inputs }); onPineResult({ key: ind.key, ...r }); return; }
+  const generation = indicatorGeneration, attempt = indicatorRequests[ind.key] = (indicatorRequests[ind.key] || 0) + 1;
+  if (ind.kind === "native") { const r = await ask("native:add", { key: ind.key, type: ind.type, inputs: ind.inputs, props: ind.props }); onPineResult({ key: ind.key, generation, attempt, ...r }); return; }
   const w = frameWin(); if (!w) return;
-  w.postMessage({ cmd: "pine:add", key: ind.key, source: prepared(ind), inputs: ind.inputs, props: ind.props }, location.origin);
+  w.postMessage({ cmd: "pine:add", key: ind.key, generation, attempt, source: prepared(ind), inputs: ind.inputs, props: ind.props }, location.origin);
 }
 function pineRemove(ind) {
-  const id = liveIds[ind.key];
+  indicatorRequests[ind.key] = (indicatorRequests[ind.key] || 0) + 1;
+  const id = liveIds[ind.key] || ind.key;
   if (id) { const w = frameWin(); if (w) w.postMessage({ cmd: "pine:remove", id }, location.origin); }
-  delete liveIds[ind.key];
+  delete liveIds[ind.key]; delete busy[ind.key];
 }
 function onPineResult(m) {
-  const ind = INDS.find((x) => x.key === m.key); delete busy[m.key]; if (!ind) return;
+  if ((m.generation !== undefined && m.generation !== indicatorGeneration) || (m.attempt !== undefined && m.attempt !== indicatorRequests[m.key])) return;
+  const ind = INDS.find((x) => x.key === m.key); delete busy[m.key]; if (!ind || !ind.on) return;
   if (m.ok) { liveIds[ind.key] = m.id; ind.err = null; ind.pending = !!m.pending; } else { ind.err = m.error || "failed"; ind.on = false; }
-  saveInds(); indChanged();
+  saveInds(false); indChanged();
   if (window.onEditorResult) onEditorResult(ind, m);
 }
 // Removed from Vela's own legend (trash icon): forget it here too, so it is not re-added on reload.
@@ -80,7 +83,27 @@ function onInputs(m) {
   const key = Object.keys(liveIds).find((k) => liveIds[k] === m.id), ind = key && INDS.find((x) => x.key === key); if (!ind) return;
   ind.inputs = m.inputs; ind.props = m.props; saveInds();
 }
-function reapplyAll() { liveIds = {}; INDS.filter((x) => x.on).forEach((x) => pineAdd(x, true)); }
+function onIndicatorVisibility(m) {
+  const key = Object.keys(liveIds).find(k => liveIds[k] === m.id), ind = INDS.find(x => x.key === key);
+  if (ind) { ind.on = !!m.visible; saveInds(); indChanged(); }
+}
+function applySyncedIndicators(inds) {
+  // Preserve unchanged handles and panes: rebuilding everything on an input change
+  // would discard the user's viewport and drawings on indicator panes.
+  const old = INDS, next = new Map(inds.map(x => [x.key,x]));
+  const reusable = (a,b) => b && a.kind === b.kind && a.type === b.type && a.source === b.source && !!a.on && !!b.on;
+  for (const item of old) if (!reusable(item,next.get(item.key)) && (!next.has(item.key) || item.on || next.get(item.key).on)) pineRemove(item);
+  INDS = inds; saveInds(false); indChanged();
+  const w = frameWin();
+  for (const item of inds) {
+    const prior = old.find(x => x.key === item.key);
+    if (reusable(prior || {}, item)) {
+      if (w && (JSON.stringify(prior.inputs || {}) !== JSON.stringify(item.inputs || {}) || JSON.stringify(prior.props || {}) !== JSON.stringify(item.props || {})))
+        w.postMessage({cmd:'indicators:update',key:item.key,inputs:item.inputs,props:item.props},location.origin);
+    } else if (item.on) pineAdd(item, true);
+  }
+}
+function reapplyAll() { indicatorGeneration++; liveIds = {}; INDS.filter((x) => x.on).forEach((x) => pineAdd(x, true)); }
 function removeInd(ind) { pineRemove(ind); INDS = INDS.filter((y) => y !== ind); saveInds(); indChanged(); }
 function toggleInd(ind, on) { ind.on = on; ind.err = null; if (on) pineAdd(ind); else pineRemove(ind); saveInds(); indChanged(); }
 // One hook every view listens to (dialog list, Pine editor status).
