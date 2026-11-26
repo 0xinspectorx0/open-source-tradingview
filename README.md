@@ -10,6 +10,8 @@ free desktop version below.)
 
 > Not affiliated with, endorsed by, or connected to TradingView, Inc. "TradingView" is their trademark.
 > This project is an independent open-source tool. It is not financial advice.
+> Also not affiliated with [TradeX Chart](https://github.com/tradex-app/TradeX-chart) (the `tradex-chart` library),
+> a separate project with a similar name.
 >
 > **Official TradeX** is only this repository and [tradex.pages.dev](https://tradex.pages.dev). Forks are welcome under
 > their own name and logo: see [TRADEMARK.md](TRADEMARK.md).
@@ -160,8 +162,8 @@ no right to the TradeX name or logo.
 
 ## Name and logo
 
-"TradeX"™ and the TradeX X logo are trademarks of Saifullah Shafin. You may fork and change the code, but a version
-you share or host needs its own name and logo. Details: [TRADEMARK.md](TRADEMARK.md).
+The TradeX X logo and "TradeX"™ as the name of this software are trademarks of Saifullah Shafin. You may fork and
+change the code, but a version you share or host needs its own name and logo. Details: [TRADEMARK.md](TRADEMARK.md).
 
 ## Contributing
 
