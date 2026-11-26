@@ -11,6 +11,7 @@ const data = {
   instruments: [
     {key:'XAUUSD', name:'Gold', cat:'commodity', brokers:{deriv:[{ticker:'frxXAUUSD',label:''}], bybit:[{ticker:'BYBIT_XAUUSDT',label:''}]}},
     {key:'BTCUSD', name:'Bitcoin', cat:'crypto', brokers:{bybit:[{ticker:'BYBIT_BTCUSDT',label:'perpetual'}]}},
+    {key:'BULLAUSD', name:'BULLA perpetual', cat:'crypto', brokers:{binance:[{ticker:'BINF_BULLAUSDT',label:'perpetual'}]}},
   ],
 };
 class Loader extends ResourceLoader {
@@ -23,7 +24,7 @@ class Loader extends ResourceLoader {
     return done(fs.readFileSync(file));
   }
 }
-async function mount(mobile = false, oldState = null) {
+async function mount(mobile = false, oldState = null, savedLayout = false) {
   const errors = [], virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', e => errors.push(e));
   const dom = new JSDOM(fs.readFileSync(path.join(root,'hub.html'), 'utf8'), {
@@ -31,6 +32,7 @@ async function mount(mobile = false, oldState = null) {
     beforeParse(w) {
       w.matchMedia = () => ({matches:!mobile}); w.alert = () => {}; w.focus = () => {}; w.Element.prototype.scrollIntoView = () => {};
       if (oldState) w.localStorage.setItem('chartHub', JSON.stringify(oldState));
+      if (savedLayout) w.localStorage.setItem('chartHubLayoutId', 'saved');
       w.fetch = async input => {
         const u = new URL(input, w.location.href), p = u.pathname;
         if (p === '/api/instruments') return {ok:true, json:async()=>data};
@@ -42,7 +44,7 @@ async function mount(mobile = false, oldState = null) {
         if (p === '/api/status') return {ok:true,json:async()=>({})};
         if (p === '/api/logs') return {ok:true,json:async()=>({problems:{},errors_15m:0,boot:1})};
         if (p === '/api/bars') return {ok:true,json:async()=>[{close:100},{close:105}]};
-        if (p.startsWith('/api/layouts')) return {ok:true,json:async()=>({layouts:[], templates:[]})};
+        if (p.startsWith('/api/layouts')) return {ok:true,json:async()=>({layouts:savedLayout ? [{id:'saved', name:'My layout', saved_at:1}] : [], templates:[]})};
         return {ok:true,json:async()=>({})};
       };
     },
@@ -55,11 +57,30 @@ async function mount(mobile = false, oldState = null) {
   assert.equal(d.querySelector('#status'), null);
   assert.equal(d.querySelector('#engines'), null);
   assert.match(d.querySelector('#frame').src, /vela\.html\?.*tf=W1/);
-  assert.equal(d.querySelector('#tfs [data-id="MN1"]').textContent, 'A');
-  d.querySelector('#tfs [data-id="MN1"]').click();
+  const timeframes = d.querySelector('#tfs');
+  assert.equal(timeframes.tagName,'SELECT');
+  assert.equal(timeframes.value,'W1');
+  assert.equal(timeframes.querySelector('option[value="MN1"]').textContent,'A');
+  assert.deepEqual([...timeframes.options].map(o=>o.value),['M1','M5','M15','M30','H1','H4','D1','W1','MN1']);
+  const chartWindow=d.querySelector('#frame').contentWindow, sent=[];
+  chartWindow.labChart={setMarket(){}};
+  chartWindow.postMessage=(message)=>sent.push(message);
+  timeframes.value='MN1'; timeframes.dispatchEvent(new w.Event('change'));
+  assert.equal(timeframes.value,'MN1');
+  assert.equal(sent.at(-1).cmd,'set'); assert.equal(sent.at(-1).tf,'MN1');
+  w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,data:{evt:'market',symbol:'frxXAUUSD',tf:'D1'}}));
+  assert.equal(timeframes.value,'D1','external chart timeframe updates the dropdown');
+  timeframes.value='MN1'; timeframes.dispatchEvent(new w.Event('change'));
+  assert.equal(d.querySelector('#layout option[value=""]').textContent,'1 Pencere');
+  assert.equal(d.querySelector('#lyBtn .nm').textContent,'Şablonlar');
+  assert.equal(d.querySelector('#symName'),null);
   assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).engine, 'vela');
   assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).tf, 'MN1');
   assert.equal(d.querySelector('#symKey').textContent,'XAUUSD');
+  w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,data:{evt:'market',symbol:'BINF_BULLAUSDT',tf:'MN1'}}));
+  assert.equal(d.querySelector('#symBtn').textContent,'BULLAUSDT');
+  assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).ticker,'BINF_BULLAUSDT');
+  w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,data:{evt:'market',symbol:'frxXAUUSD',tf:'MN1'}}));
   assert.equal(d.querySelector('#brokers'),null);
   assert.equal(d.querySelector('#ticker'),null);
   w.LabSymbols = [{ticker:'BYBIT_S_BTCUSDT',source:'bybit'}, {ticker:'BINF_BTCUSDT',source:'binance'}];
@@ -141,6 +162,13 @@ async function mount(mobile = false, oldState = null) {
   ({dom,w,d,errors} = await mount(true));
   assert.equal(d.querySelector('#dock').hidden,true);
   d.querySelector('[data-panel="watchlist"]').click(); assert.equal(d.querySelector('#dock').hidden,false);
+  assert.equal(d.querySelector('#tfs').tagName,'SELECT');
+  assert.equal(errors.length,0,errors.map(e=>e.message).join('\n')); dom.window.close();
+  ({dom,w,d,errors} = await mount(false, null, true));
+  assert.equal(d.querySelector('#lyBtn .nm').textContent,'Şablonlar','saved layout names never replace the button label');
+  d.querySelector('#lyBtn').click(); await delay(20);
+  assert.equal(d.querySelector('#lyMenu').hidden,false);
+  assert.equal(d.querySelector('#lyMenu .hd b').textContent,'My layout','saved name is retained inside the menu');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n')); dom.window.close();
   const vm = require('node:vm');
   const bundle = fs.readFileSync(path.join(root,'vela.bundle.js'),'utf8');

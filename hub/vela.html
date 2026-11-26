@@ -64,6 +64,7 @@
 <script src="theme.js"></script>
 <script src="periods.js"></script>
 <script src="lab.js"></script>
+<script src="pine_alert_toast.js"></script>
 <script src="orderflow_delta.js"></script>
 <script src="orderflow_profile.js"></script>
 <script src="orderflow_charttypes.js"></script>
@@ -146,6 +147,7 @@ class HubPineEngine extends VelaLab.PineWorkerEngine {
   execute(req, handlers) {
     const h = Object.create(handlers);
     h.onModel = (model) => { if (!HubSettingsLoad().indicatorBars && model && model.barColors) model = { ...model, barColors: undefined }; handlers.onModel(model); };
+    h.onAlert = (alert) => TradeXForwardPineAlert(ws, handlers, alert);
     return super.execute(req, h);
   }
 }

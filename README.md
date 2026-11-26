@@ -122,7 +122,10 @@ internal ticker used to request data is unchanged. OHLC labels and values use a 
 and cream in dark themes, independent of candle colours; the adjacent price change retains its directional colour.
 Price and indicator pane controls use transparent, outlined buttons with thicker icons. In the TradeX shell,
 chart type, indicators, undo/redo, Vela panels and screenshot share the main top bar with market, timeframe and layout.
-The bar scrolls horizontally on narrow screens; the standalone Vela page retains its own toolbar.
+The timeframe is selected from a dropdown, and the chart-type icon opens the available styles. The saved-layout and
+indicator-template menu is labelled **Şablonlar**. The bar scrolls horizontally on narrow screens; the standalone
+Vela page retains its own toolbar. Malformed Pine alerts with an object title and no message are forwarded as events
+but do not produce the repeated `[object Object]` notification bubble; meaningful alerts and errors remain visible.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
 to add the current market or **+ Ara** to search. Choose an entry to open its exact source and market, or remove it
