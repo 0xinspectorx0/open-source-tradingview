@@ -8,8 +8,16 @@
   /* Wrapper layout: top bar / [chart | dock | rail] / status bar. Panels plug into the dock. */
   #app { position:absolute; inset:0; display:grid; grid-template-rows:38px minmax(0, 1fr); grid-template-columns:1fr auto 40px }
   #bar { grid-column:1 / -1; display:flex; align-items:center; gap:8px; padding:0 8px; background:var(--panel);
-         border-bottom:1px solid var(--line); white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none }
+         border-bottom:1px solid var(--line); white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin }
+  #bar::-webkit-scrollbar { height:3px }
+  #bar::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px }
   #brand { font-weight:700; letter-spacing:.01em; color:var(--accent); font-size:14px; margin-right:2px }
+  #velaTools { display:flex; align-items:center; gap:3px; flex:none }
+  #velaTools button { display:inline-flex; align-items:center; gap:5px; min-height:28px; padding:4px 7px; border:0; border-radius:4px; background:transparent; color:var(--dim); font:inherit; cursor:pointer }
+  #velaTools button:hover:not(:disabled), #velaTools button[data-active='1'] { background:var(--raised); color:var(--text) }
+  #velaTools button:disabled { color:var(--faint); cursor:not-allowed; opacity:.55 }
+  #velaTools button svg { width:18px; height:18px }
+  #velaTools button:focus-visible, #priceStyle:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
   .sep { width:1px; height:20px; background:var(--line); flex:none }
   .seg { display:flex; flex:none; gap:1px }
   .seg button { background:transparent; color:var(--dim); border:0; border-radius:3px; padding:5px 8px; font:inherit; cursor:pointer }
@@ -184,6 +192,8 @@
   <div class="seg" id="tfs"></div><span class="sep"></span>
   <select id="layout" title="Grafik düzeni"><option value="">1 grafik</option><option value="2h">2 yan yana</option><option value="2v">2 alt alta</option><option value="4">4 grafik</option><option value="8">8 grafik</option></select>
   <span class="sep"></span>
+  <select id="priceStyle" aria-label="Grafik tipi" title="Grafik tipi" disabled><option>Grafik tipi</option></select>
+  <div id="velaTools" aria-label="Grafik araçları"></div>
 </div>
 <div id="stage"><iframe id="frame" title="Grafik"></iframe><div id="cover" hidden><div id="coverText"></div></div></div>
 <aside id="dock" hidden></aside>
@@ -438,6 +448,7 @@ document.getElementById("bar").addEventListener("wheel", (e) => {
   b.scrollLeft += e.deltaY; e.preventDefault();
 }, { passive: false });
 </script>
+<script src="unified_toolbar.js"></script>
 <script src="log_panel.js"></script>
 <script src="layouts.js"></script>
 <script src="symbol_search.js"></script>
