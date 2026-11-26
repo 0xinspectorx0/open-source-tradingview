@@ -178,8 +178,10 @@ def build():
         'a{display:inline-block;margin-top:18px;padding:10px 22px;border-radius:10px;background:#e8ecee;color:#0a0a0b;text-decoration:none;font-weight:600}'
         '</style></head><body><main><div><img src="/web/brand/icon-64.png" alt=""><h1>Page not found</h1>'
         '<div>This address does not exist on TradeX.</div><a href="/hub">Open the charts</a></div></main></body></html>')
-    for f in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
-        shutil.copy2(os.path.join(ROOT, f), os.path.join(OUT, f + (".txt" if f == "LICENSE" else "")))
+    for f in ("LICENSE", "THIRD_PARTY_NOTICES.md", "NOTICE", "TRADEMARK.md"):
+        if os.path.isfile(os.path.join(ROOT, f)):
+            shutil.copy2(os.path.join(ROOT, f), os.path.join(OUT, f + (".txt" if f in ("LICENSE", "NOTICE") else "")))
+    source_stamp()
     # Static-only config for `cd web_dist && vercel deploy` (no build there; headers same as the repo's vercel.json).
     cfg = json.load(open(os.path.join(ROOT, "vercel.json")))
     for k in ("buildCommand", "outputDirectory", "installCommand"):
@@ -192,6 +194,35 @@ def build():
         raise SystemExit(1)
     n = sum(len(fs) for _, _, fs in os.walk(OUT))
     print(f"web_dist: {n} files, personal-data scan clean")
+
+
+REPO_URL = "https://github.com/saifullahshafin/open-source-tradingview"
+
+
+def source_stamp():
+    """AGPL: the web version must match public source. Write web_dist/SOURCE.txt (which commit it was built from)
+    and warn loudly when the build includes uncommitted files, i.e. code that is not on GitHub yet."""
+    sha = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("CF_PAGES_COMMIT_SHA") or ""
+    dirty = []
+    try:
+        if not sha:
+            sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                                 timeout=20).stdout.strip()
+        st = subprocess.run(["git", "status", "--porcelain", "--", "hub", "scripts", "LICENSE", "NOTICE",
+                             "THIRD_PARTY_NOTICES.md", "TRADEMARK.md"], cwd=ROOT, capture_output=True, text=True,
+                            timeout=20).stdout
+        dirty = [ln[3:] for ln in st.splitlines() if ln.strip()]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    lines = ["TradeX web version - source code", f"Repository: {REPO_URL}",
+             f"Built from commit: {sha or 'unknown'}" + (f"  ({REPO_URL}/tree/{sha})" if sha else ""),
+             f"Built (UTC): {time.strftime('%Y-%m-%d %H:%M', time.gmtime())}"]
+    if dirty:
+        lines.append(f"Includes {len(dirty)} changed file(s) not yet committed; they are published with the next push:")
+        lines += ["  " + d for d in dirty]
+        print("WARNING (AGPL): this web build contains changes that are not on GitHub yet:\n  " + "\n  ".join(dirty[:20])
+              + "\n  Commit and push them before or right after you deploy, so the web version matches its public source.")
+    open(os.path.join(OUT, "SOURCE.txt"), "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
 
 
 def patch_candles(path):

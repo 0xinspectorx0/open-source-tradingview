@@ -14,6 +14,11 @@
 - Do not put the hub on a public address or behind a public reverse proxy. It has no login.
 - Do not commit `.env`, MT5 tokens or SSH keys.
 
+## Get TradeX only from official places
+Install only from this repository's releases or the one-line installer in the README, and use the web version
+only at https://tradex.pages.dev (the old address https://tradex-charts.vercel.app forwards there). A copy offered anywhere else under the TradeX name is not official and may be
+changed to steal keys or passwords. List of official places: [TRADEMARK.md](TRADEMARK.md).
+
 ## Reporting a problem
-Please open a GitHub issue without exploit details and ask for a private contact, or use GitHub's
-"Report a vulnerability" (private advisory) on this repository.
+Use GitHub's private "Report a vulnerability" button on this repository's Security tab. Please do not post
+exploit details in a public issue.

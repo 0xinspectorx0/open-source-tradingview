@@ -10,6 +10,9 @@ free desktop version below.)
 
 > Not affiliated with, endorsed by, or connected to TradingView, Inc. "TradingView" is their trademark.
 > This project is an independent open-source tool. It is not financial advice.
+>
+> **Official TradeX** is only this repository and [tradex.pages.dev](https://tradex.pages.dev). Forks are welcome under
+> their own name and logo: see [TRADEMARK.md](TRADEMARK.md).
 
 ![TradeX: gold on the free Deriv feed, Vela engine](docs/screenshots/01_hub_vela_gold.png)
 
@@ -132,6 +135,7 @@ bridge/     mt5_bridge.py: read-only candle bridge for a remote MT5 terminal
 build/      source and build script for hub/vela.bundle.js and hub/vendor (npm)
 docs/       screenshots
 licenses/   third-party licence and notice files
+NOTICE      copyright and the two extra AGPL terms (attribution, no trademark rights)
 ```
 
 ## Roadmap
@@ -149,3 +153,17 @@ licenses/   third-party licence and notice files
 modified version for other people over a network, you must offer them its source.
 Third-party parts keep their own licences. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 Market data belongs to its providers. Check each feed's terms before any public or commercial use.
+
+Copyright (C) 2026 Saifullah Shafin. [NOTICE](NOTICE) adds two terms allowed by AGPL section 7, for TradeX's own
+code only: keep the line "Based on TradeX by Saifullah Shafin" wherever your version shows its legal notices, and
+no right to the TradeX name or logo.
+
+## Name and logo
+
+"TradeX"™ and the TradeX X logo are trademarks of Saifullah Shafin. You may fork and change the code, but a version
+you share or host needs its own name and logo. Details: [TRADEMARK.md](TRADEMARK.md).
+
+## Contributing
+
+Pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first: commits are signed off (`git commit -s`)
+and contributions are accepted under its terms.
