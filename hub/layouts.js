@@ -125,7 +125,7 @@
   const menu = document.createElement("div"); menu.id = "lyMenu"; menu.hidden = true; document.body.appendChild(menu);
 
   function setState(s) { state = s; paintButton(); if (!menu.hidden) { const e = menu.querySelector(".hd .sub"); if (e) e.textContent = s || "Tüm değişiklikler kaydedildi"; } }
-  function paintButton() { btnEl.querySelector(".nm").textContent = curName || "Düzenler"; btnEl.querySelector(".st").textContent = state === "Kaydediliyor..." ? "kaydediliyor" : (state.startsWith("Kaydedilemedi") ? "!" : ""); }
+  function paintButton() { btnEl.querySelector(".nm").textContent = "Şablonlar"; btnEl.querySelector(".st").textContent = state === "Kaydediliyor..." ? "kaydediliyor" : (state.startsWith("Kaydedilemedi") ? "!" : ""); }
   async function refreshList() { try { list = await api(""); const c = list.layouts.find((x) => x.id === curId); if (c) curName = c.name; paintButton(); if (!menu.hidden) render(); return true; } catch (e) { setState("Yüklenemedi: " + e.message); return false; } }
   window.layoutsRefresh = refreshList;
   const when = (t) => { const d = new Date(t * 1000); return d.toISOString().slice(0, 16).replace("T", " ") + " UTC"; };

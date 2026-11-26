@@ -18,22 +18,31 @@
   #velaTools button:disabled { color:var(--faint); cursor:not-allowed; opacity:.55 }
   #velaTools button svg { width:18px; height:18px }
   #velaTools button:focus-visible, #priceStyle:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
+  #priceStyle { flex:none; display:grid; place-items:center; width:32px; height:28px; padding:4px; border:0; border-radius:4px; color:var(--dim); background:transparent; cursor:pointer }
+  #priceStyle:hover:not(:disabled) { color:var(--text); background:var(--raised) }
+  #priceStyle:disabled { opacity:.55; cursor:not-allowed }
+  #priceStyle svg { width:18px; height:18px }
+  #priceStyleMenu { position:fixed; z-index:80; min-width:180px; max-width:calc(100vw - 16px); max-height:min(60vh,400px); overflow:auto; padding:4px; border:1px solid var(--line); border-radius:6px; background:var(--panel); box-shadow:0 8px 24px #0006 }
+  #priceStyleMenu[hidden] { display:none }
+  #priceStyleMenu button { display:block; width:100%; padding:8px 10px; border:0; border-radius:4px; text-align:left; font:inherit; color:var(--text); background:transparent; cursor:pointer }
+  #priceStyleMenu button:hover, #priceStyleMenu button:focus-visible, #priceStyleMenu button[aria-checked="true"] { background:var(--raised) }
+  #priceStyleMenu button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
+  #priceStyleMenu button[aria-checked="true"]::after { content:'✓'; float:right; color:var(--accent) }
   .sep { width:1px; height:20px; background:var(--line); flex:none }
   .seg { display:flex; flex:none; gap:1px }
   .seg button { background:transparent; color:var(--dim); border:0; border-radius:3px; padding:5px 8px; font:inherit; cursor:pointer }
   .seg button:hover:not(:disabled) { background:var(--raised); color:var(--text) }
   .seg button.on { color:var(--accent); background:var(--raised) }
-  #tfs button.on { color:var(--accentInk); background:var(--accent) }
   .seg button:disabled { color:var(--faint); cursor:not-allowed }
   .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--faint) }
   .dot.ok { background:var(--ok) } .dot.bad { background:var(--bad) }
   select { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:3px; padding:4px 6px; font:inherit }
+  #bar select { flex:none }
   #symBtn { flex:none; display:flex; align-items:center; gap:8px; max-width:300px; background:transparent; color:var(--text); border:1px solid transparent; border-radius:4px; padding:4px 9px 4px 7px; font:inherit; cursor:pointer }
   #symBtn:hover { background:var(--raised); border-color:var(--line) } #symBtn svg { flex:none; color:var(--dim) }
   #cmpBtn { flex:none; width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:4px; cursor:pointer; padding:0 }
   #cmpBtn:hover { background:var(--raised); border-color:var(--line); color:var(--text) }
-  #symKey { font-weight:700; font-size:14px; letter-spacing:.01em } #symName { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  @media (max-width:760px) { #symName { display:none } }
+  #symKey { font-weight:700; font-size:14px; letter-spacing:.01em }
   #stage { position:relative; grid-row:2; grid-column:1; min-width:0 }
   #frame { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:var(--bg) }
   #cover { position:absolute; inset:0; background:color-mix(in srgb, var(--bg) 86%, transparent); display:flex; align-items:center; justify-content:center; z-index:5 }
@@ -186,13 +195,13 @@
 <div id="app">
 <div id="bar">
   <span id="brand">TradeX</span><span class="sep"></span>
-  <button id="symBtn" title="Sembol ara (grafikte yazmaya da başlayabilirsiniz)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg><span id="symKey"></span><span id="symName"></span></button><button id="cmpBtn" title="Sembol karşılaştır veya ekle" aria-label="Sembol karşılaştır veya ekle"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg></button>
+  <button id="symBtn" title="Sembol ara (grafikte yazmaya da başlayabilirsiniz)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg><span id="symKey"></span></button><button id="cmpBtn" title="Sembol karşılaştır veya ekle" aria-label="Sembol karşılaştır veya ekle"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg></button>
   <select id="variant" title="Bu kaynaktaki piyasa türü" hidden></select>
   <span class="sep"></span>
-  <div class="seg" id="tfs"></div><span class="sep"></span>
-  <select id="layout" title="Grafik düzeni"><option value="">1 grafik</option><option value="2h">2 yan yana</option><option value="2v">2 alt alta</option><option value="4">4 grafik</option><option value="8">8 grafik</option></select>
+  <select id="tfs" aria-label="Zaman aralığı" title="Zaman aralığı"></select><span class="sep"></span>
+  <select id="layout" title="Grafik düzeni" aria-label="Pencere düzeni"><option value="">1 Pencere</option><option value="2h">2 yan yana</option><option value="2v">2 alt alta</option><option value="4">4 grafik</option><option value="8">8 grafik</option></select>
   <span class="sep"></span>
-  <select id="priceStyle" aria-label="Grafik tipi" title="Grafik tipi" disabled><option>Grafik tipi</option></select>
+  <button id="priceStyle" type="button" aria-label="Grafik tipi" aria-haspopup="menu" aria-expanded="false" aria-controls="priceStyleMenu" title="Grafik tipi" disabled><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 2v2m0 8v2M11.5 2v1.5m0 7.5v3"/><rect x="2.8" y="4" width="3.4" height="8" rx=".6"/><rect x="9.8" y="3.5" width="3.4" height="7.5" rx=".6" fill="currentColor"/></svg></button>
   <div id="velaTools" aria-label="Grafik araçları"></div>
 </div>
 <div id="stage"><iframe id="frame" title="Grafik"></iframe><div id="cover" hidden><div id="coverText"></div></div></div>
@@ -229,12 +238,12 @@ async function init() {
     const g = inst("XAUUSD"), b = g && (g.brokers.arm ? "arm" : g.brokers.deriv ? "deriv" : Object.keys(g.brokers)[0]);
     Object.assign(st, b ? { key: "XAUUSD", broker: b, ticker: g.brokers[b][0].ticker } : { key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD" });
   }
-  TFS.forEach(([id, n]) => { const b = btn(n, () => { st.tf = id; push(); }, id); if (id === 'W1') b.title = 'Haftalık'; if (id === 'MN1') b.title = 'Aylık'; $("tfs").appendChild(b); });
+  TFS.forEach(([id, n]) => { const o = new Option(n, id); if (id === 'W1') o.title = 'Haftalık'; if (id === 'MN1') o.title = 'Aylık'; $("tfs").add(o); });
   pollStatus(); setInterval(pollStatus, 10000);
   paint(); loadEngine();
   if (!openPanel && window.matchMedia('(min-width: 701px)').matches) openPanelByName('watchlist');
 }
-function btn(text, fn, id) { const b = document.createElement("button"); b.textContent = text; b.dataset.id = id; b.onclick = fn; return b; }
+$("tfs").onchange = (e) => { st.tf = e.target.value; push(); };
 
 // Keep the old chart covered while the selected market loads.
 let pending = null, coverTimer = null, coverRetry = null;
@@ -268,9 +277,9 @@ function chooseInstrument(k) {
 }
 function paint() {
   const i = inst(st.key);
-  $("symKey").textContent = TradeXMarketName(st.ticker, st.broker); $("symName").textContent = i ? i.name : "";
+  $("symKey").textContent = TradeXMarketName(st.ticker, st.broker);
   $("layout").disabled = false;
-  $("tfs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.id === st.tf));
+  $("tfs").value = st.tf;
   const opts = (i && i.brokers[st.broker]) || [];
   const v = $("variant"); v.hidden = opts.length < 2; v.innerHTML = "";
   opts.forEach((o) => v.add(new Option(o.label || o.ticker, o.ticker)));
