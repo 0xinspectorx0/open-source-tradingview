@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><title>TradeX - Vela engine</title>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TradeX - Vela engine</title>
 <style>
   html,body{margin:0;height:100%;background:#0f161d;color:#d6dee5;font:13px system-ui,Segoe UI,sans-serif}
   #top{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #26333f;height:31px;box-sizing:border-box}
@@ -28,6 +28,9 @@
   /* Symbol watermark (2026-11-25): Vela lays it OVER the candles (z-index 1). The script below moves it into the plot,
      right after the backdrop layer, so it sits behind the candles; strength comes from Settings (theme.js --tx-wm). */
   .vela-watermark { z-index: auto !important; opacity: var(--tx-wm, 0.05) !important; }
+  /* The parent shell already provides symbol and timeframe controls. Keep the other mobile tools. */
+  html.embed [data-layout="mobile"] .vela-mb-symbol,
+  html.embed [data-layout="mobile"] .vela-mb-tf { display:none !important; }
 </style>
 <script>
 (function () {
@@ -157,11 +160,7 @@ function candleParts(value) {
 function guardCandleColours(chart) {
   if (!LabEmbedded || chart.hubGuarded) return;
   chart.hubGuarded = true;
-  // Web: TradeX logo in the chart corner instead of Vela's mark (licence kept: "Charts: Vela" link in the status bar,
-  // web/api_shim.js). Desktop keeps Vela's own mark.
-  if (window.TRADEX_WEB) try { chart.renderer.set("attribution", '<span style="display:flex;align-items:center;gap:7px;opacity:.9;pointer-events:none">' +
-    '<img src="web/brand/icon-64.png" alt="" style="width:22px;height:22px;border-radius:5px;display:block">' +
-    '<span style="font:600 13px var(--font,system-ui,sans-serif);letter-spacing:.02em">TradeX</span></span>'); } catch (e) { console.warn("attribution", e); }
+  // Keep Vela's built-in attribution visible in both web and desktop charts.
   try { chart.renderer.setSettingsVisibility({ hidden: CANDLE_COLOUR_ROWS }); } catch (e) { console.warn("settings rows", e); }
   try { chart.renderer.onConfigChanged(() => {
     if (applyingHubTheme) return; // applyConfig synchronously fires this callback; don't save our own changes back.
@@ -247,7 +246,7 @@ function build(layout) {
     theme: velaTheme(), upColor: HubTheme.up, downColor: HubTheme.down,
     providers: { lab: () => provider }, persist: false,
     // Inside the TradeX wrapper, symbol / timeframe / layout live in the wrapper's bar only (no duplicate controls).
-    ...(LabEmbedded ? { topbar: { left: ["style", "indicators", "undo-redo"] } } : {}),
+    topbar: { ...(LabEmbedded ? { left: ["style", "indicators", "undo-redo"] } : {}), right: ["actions", "panels", "screenshot"] },
     // Pine Script runs in its own worker per chart (PineTS via @luxalgo/vela-pinets), so heavy scripts never freeze the chart.
     engines: { pine: () => new HubPineEngine() },
   });

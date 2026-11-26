@@ -176,18 +176,13 @@
     let closed = false; try { closed = sessionStorage.getItem("txwebBanner") === "0"; } catch (_) {}
     const brand = document.getElementById("brand");
     if (brand && !brand.querySelector(".txlogo")) { const im = document.createElement("img"); im.className = "txlogo"; im.src = "web/brand/icon-64.png"; im.alt = ""; brand.prepend(im); }
-    const stat = document.getElementById("bar");   // attribution remains accessible in the top bar, even with the banner closed
-    if (stat && !stat.querySelector(".txsrc")) { const a = document.createElement("a"); a.className = "txsrc"; a.href = REPO; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Kaynak kodu (AGPL)"; a.style.cssText = "color:var(--dim);text-decoration:none;margin-left:auto;margin-right:12px;white-space:nowrap"; stat.appendChild(a);
-      // Vela licence (THIRD_PARTY_NOTICES.md): the chart corner shows the TradeX logo instead of Vela's mark, so "Vela"
-      // with a link to velacharts.dev must be on the same screen. It lives here, next to the source link.
-      const v = document.createElement("a"); v.className = "txvela"; v.href = "https://velacharts.dev"; v.target = "_blank"; v.rel = "noopener"; v.textContent = "Grafikler: Vela";
-      v.style.cssText = "color:var(--dim);text-decoration:none;margin-right:12px;white-space:nowrap"; stat.insertBefore(v, a); a.style.marginLeft = "0"; v.style.marginLeft = "auto"; }
+    // Source and TradeX attribution remain available under Settings > Hakkında.
+    // Vela's own attribution mark remains visible on the chart.
     if (closed || !document.getElementById("app")) return;
     const b = document.createElement("div"); b.id = "txweb";
     b.innerHTML = `<span class="m"><b>TradeX web beta</b><span class="long"> &middot; borsalardan ücretsiz grafikler, tarayıcınızda</span></span>` +
       `<a class="wl" href="${WAITLIST}" target="_blank" rel="noopener">Bekleme listesine katıl</a>` +
       `<a href="${DESKTOP}" target="_blank" rel="noopener" title="MT5, alarmlar, emir akışı ve daha fazlası">Masaüstü sürümü<span class="long"> (MT5, alarmlar)</span></a>` +
-      `<a href="${REPO}" target="_blank" rel="noopener" title="Açık kaynak (AGPL-3.0)">Kaynak</a>` +
       `<button class="x" title="Gizle">&#x2715;</button>`;
     b.querySelector(".x").onclick = () => { b.remove(); document.documentElement.classList.remove("txweb-banner"); try { sessionStorage.setItem("txwebBanner", "0"); } catch (_) {} };
     document.body.appendChild(b); document.documentElement.classList.add("txweb-banner");

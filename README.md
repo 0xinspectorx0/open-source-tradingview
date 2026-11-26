@@ -34,7 +34,7 @@ free desktop version below.)
   - **Local MT5:** a terminal on this Windows PC (any broker).
   - **Remote MT5:** a terminal on a VPS or cloud server, reached through an SSH tunnel and a small bridge
     (`bridge/mt5_bridge.py`). The bridge only reads candles. It never places orders.
-- **The broker switch keeps the instrument.** Gold stays gold when you move from Deriv to Bybit to MT5.
+- **Choose the price source in symbol search.** Click a source tag beside a result to open the same instrument on that feed.
   Only exact matches are joined, so gold tokens such as PAXG are kept separate from gold spot.
 - **Vela chart engine:** Pine Script, native indicators, drawing tools and layouts of up to 8 synced charts.
 - **Timeframes and locale:** weekly and monthly candles are aggregated from each feed’s daily bars using Monday-start weeks and calendar months (UTC calendar dates). History depth depends on the source. Order-flow footprint, delta and session volume profile do not support these two timeframes. The main interface defaults to Turkish and the chart timezone to Europe/Istanbul; saved layouts may retain their chosen timezone. Some custom plugins and feed messages remain in English.
@@ -114,7 +114,7 @@ Then open <http://localhost:8770/hub.html>. On Windows you can double-click `sta
 
 ### Candle appearance and watchlist
 
-Open **Settings** (gear on the right) to set rising/falling body, border and wick colours, toggle each part,
+Open **Settings** (gear on the right), then expand a section to set rising/falling body, border and wick colours, toggle each part,
 choose wick thickness and adjust each colour's opacity from 0% to 100%. These settings are saved in the browser
 and apply to all Vela charts; the candle reset restores full opacity. Pine scripts allowed to recolour candles can
 override the body colour and its opacity. The chart's display labels use the market name and the actual feed name; the

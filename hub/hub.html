@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><title>TradeX</title>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TradeX</title>
 <script src="market_display.js"></script>
 <script src="theme.js"></script>
 <style>
@@ -26,7 +26,6 @@
   #cmpBtn:hover { background:var(--raised); border-color:var(--line); color:var(--text) }
   #symKey { font-weight:700; font-size:14px; letter-spacing:.01em } #symName { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   @media (max-width:760px) { #symName { display:none } }
-  #ticker { color:var(--dim); font:12px var(--mono) }
   #stage { position:relative; grid-row:2; grid-column:1; min-width:0 }
   #frame { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:var(--bg) }
   #cover { position:absolute; inset:0; background:color-mix(in srgb, var(--bg) 86%, transparent); display:flex; align-items:center; justify-content:center; z-index:5 }
@@ -51,8 +50,15 @@
   #rail { grid-row:2; grid-column:3; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding-top:6px; gap:4px }
   #rail button { width:30px; height:30px; border:0; border-radius:4px; background:transparent; color:var(--dim); cursor:pointer; display:grid; place-items:center }
   #rail button:hover { background:var(--raised); color:var(--text) } #rail button.on { color:var(--accent); background:var(--raised) }
-  .set { padding:10px 12px; border-bottom:1px solid var(--grid) }
-  .set h4 { margin:0 0 8px; font-size:11px; font-weight:600; color:var(--dim); letter-spacing:.05em; text-transform:uppercase }
+  .set { border-bottom:1px solid var(--grid) }
+  .set summary { list-style:none; display:flex; align-items:center; justify-content:space-between; padding:12px; cursor:pointer; font-size:11px; font-weight:600; color:var(--dim); letter-spacing:.05em; text-transform:uppercase }
+  .set summary::-webkit-details-marker { display:none }
+  .set summary::after { content:'+'; font-size:16px; line-height:1; color:var(--dim) }
+  .set[open] summary::after { content:'−' }
+  .set summary:hover, .set summary:focus-visible { color:var(--text) }
+  .set-body { padding:0 12px 10px }
+  .set-body .legal { color:var(--dim); font-size:11px; line-height:1.5 }
+  .set-body .legal a { color:var(--accent) }
   .set .presets { display:flex; gap:6px; flex-wrap:wrap }
   .set .presets button { flex:1; min-width:80px; padding:8px 6px; border:1px solid var(--line); border-radius:4px; cursor:pointer; font:inherit; font-size:12px }
   .set .presets button.on { outline:2px solid var(--accent); outline-offset:1px }
@@ -173,9 +179,8 @@
 <div id="bar">
   <span id="brand">TradeX</span><span class="sep"></span>
   <button id="symBtn" title="Sembol ara (grafikte yazmaya da başlayabilirsiniz)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg><span id="symKey"></span><span id="symName"></span></button><button id="cmpBtn" title="Sembol karşılaştır veya ekle" aria-label="Sembol karşılaştır veya ekle"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg></button>
-  <div class="seg" id="brokers" title="Veri kaynağı: aynı enstrüman, farklı kaynak"></div>
   <select id="variant" title="Bu kaynaktaki piyasa türü" hidden></select>
-  <span id="ticker"></span><span class="sep"></span>
+  <span class="sep"></span>
   <div class="seg" id="tfs"></div><span class="sep"></span>
   <select id="layout" title="Grafik düzeni"><option value="">1 grafik</option><option value="2h">2 yan yana</option><option value="2v">2 alt alta</option><option value="4">4 grafik</option><option value="8">8 grafik</option></select>
   <span class="sep"></span>
@@ -215,7 +220,6 @@ async function init() {
     Object.assign(st, b ? { key: "XAUUSD", broker: b, ticker: g.brokers[b][0].ticker } : { key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD" });
   }
   TFS.forEach(([id, n]) => { const b = btn(n, () => { st.tf = id; push(); }, id); if (id === 'W1') b.title = 'Haftalık'; if (id === 'MN1') b.title = 'Aylık'; $("tfs").appendChild(b); });
-  DATA.brokers.forEach((b) => { const x = btn("", () => chooseBroker(b.id), b.id); x.innerHTML = `<span class="dot"></span>${b.name}`; $("brokers").appendChild(x); });
   pollStatus(); setInterval(pollStatus, 10000);
   paint(); loadEngine();
   if (!openPanel && window.matchMedia('(min-width: 701px)').matches) openPanelByName('watchlist');
@@ -252,29 +256,15 @@ function chooseInstrument(k) {
   Object.assign(st, { key: k, broker: b, ticker: i.brokers[b][0].ticker });
   push();
 }
-function chooseBroker(b) {
-  const i = inst(st.key); if (!i || !i.brokers[b]) return;
-  Object.assign(st, { broker: b, ticker: i.brokers[b][0].ticker });
-  push();
-}
-
 function paint() {
   const i = inst(st.key);
   $("symKey").textContent = TradeXMarketName(st.ticker, st.broker); $("symName").textContent = i ? i.name : "";
   $("layout").disabled = false;
   $("tfs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.id === st.tf));
-  $("brokers").querySelectorAll("button").forEach((b) => {
-    const has = !!(i && i.brokers[b.dataset.id]), s = status[b.dataset.id];
-    b.disabled = !has; b.classList.toggle("on", b.dataset.id === st.broker);
-    b.title = (has ? "" : "Bu kaynakta bulunmuyor. ") + (s ? s.msg : "");
-    b.querySelector(".dot").className = "dot" + (s ? (s.ok ? " ok" : " bad") : "");
-  });
   const opts = (i && i.brokers[st.broker]) || [];
   const v = $("variant"); v.hidden = opts.length < 2; v.innerHTML = "";
   opts.forEach((o) => v.add(new Option(o.label || o.ticker, o.ticker)));
   v.value = st.ticker;
-  $("ticker").textContent = ((DATA.brokers.find(b => b.id === st.broker) || {}).name || TradeXMarketSource(st.ticker, st.broker));
-  $("ticker").title = "Veri kaynağı";
   if (openPanel === "watchlist") markWatchlist();
 }
 $("variant").onchange = (e) => { st.ticker = e.target.value; push(); };
@@ -332,10 +322,22 @@ function themeChanged() {
   const w = $("frame").contentWindow; if (w) w.postMessage({ cmd: "theme" }, location.origin);
   renderSettings();
 }
+let settingsSection = null;
 function renderSettings() {
   const s = HubSettingsLoad(), t = HubTheme, d = $("dock");
   d.innerHTML = "<h3>Ayarlar</h3>";
-  const sec = (title) => { const x = document.createElement("div"); x.className = "set"; x.innerHTML = `<h4>${title}</h4>`; d.appendChild(x); return x; };
+  const sec = (title) => {
+    const details = document.createElement("details"), heading = document.createElement("summary"), body = document.createElement("div");
+    details.className = "set"; details.open = settingsSection === title; heading.textContent = title; body.className = "set-body";
+    details.append(heading, body); d.appendChild(details);
+    heading.addEventListener("click", (e) => {
+      e.preventDefault();
+      const opening = !details.open;
+      d.querySelectorAll("details.set").forEach((other) => { other.open = false; });
+      details.open = opening; settingsSection = opening ? title : null;
+    });
+    return body;
+  };
   const pre = sec("Tema"), row = document.createElement("div"); row.className = "presets"; pre.appendChild(row);
   Object.entries(HubPresets).forEach(([k, p]) => { const b = document.createElement("button"); b.textContent = p.label;
     b.style.cssText = `background:${p.bg};color:${p.text};border-color:${p.line}`; b.className = s.preset === k ? "on" : "";
@@ -395,6 +397,10 @@ function renderSettings() {
   const ui = colors("Arayüz", [["bg", "Grafik arka planı"], ["panel", "Paneller ve çubuklar"], ["text", "Yazı"], ["dim", "İkincil yazı"], ["line", "Kenarlıklar"], ["grid", "Izgara çizgileri"], ["accent", "Vurgu (seçim, fiyat)"]]);
   const r = document.createElement("button"); r.className = "reset"; r.textContent = "Renkleri temaya sıfırla";
   r.onclick = () => { HubSettingsSave({ ...HubSettingsLoad(), overrides: {} }); themeChanged(); }; ui.appendChild(r);
+  const about = sec("Hakkında"), legal = document.createElement("div");
+  legal.className = "legal";
+  legal.innerHTML = 'TradeX’in değiştirilmiş sürümüdür. <a href="https://github.com/0xinspectorx0/open-source-tradingview" target="_blank" rel="noopener">Kaynak kodu (AGPL)</a><br>Based on TradeX by Saifullah Shafin — <a href="https://github.com/saifullahshafin/open-source-tradingview" target="_blank" rel="noopener">orijinal proje</a>';
+  about.appendChild(legal);
 }
 let openPanel = null;
 // Candle colours changed inside a chart's own Chart settings: same saved theme, refresh here (2026-11-25).
@@ -407,6 +413,7 @@ function renderFeeds() {
 }
 function openPanelByName(name) {
   if (openPanel === 'watchlist') watchSeq++;
+  if (name === 'settings' && openPanel !== 'settings') settingsSection = null;
   openPanel = name;
   document.querySelectorAll("#rail button").forEach((x) => x.classList.toggle("on", x.dataset.panel === openPanel));
   $("dock").classList.remove("wide"); $("dock").hidden = !openPanel; if (openPanel) PANELS[openPanel]();
