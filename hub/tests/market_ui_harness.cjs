@@ -9,7 +9,7 @@ const data = {
   brokers: [{id:'deriv', name:'Deriv'}, {id:'bybit', name:'Bybit'}, {id:'binance', name:'Binance'}],
   cats: [{id:'crypto', name:'Crypto'}, {id:'commodity', name:'Commodities'}],
   instruments: [
-    {key:'XAUUSD', name:'Gold', cat:'commodity', brokers:{deriv:[{ticker:'frxXAUUSD',label:''}]}},
+    {key:'XAUUSD', name:'Gold', cat:'commodity', brokers:{deriv:[{ticker:'frxXAUUSD',label:''}], bybit:[{ticker:'BYBIT_XAUUSDT',label:''}]}},
     {key:'BTCUSD', name:'Bitcoin', cat:'crypto', brokers:{bybit:[{ticker:'BYBIT_BTCUSDT',label:'perpetual'}]}},
   ],
 };
@@ -60,7 +60,8 @@ async function mount(mobile = false, oldState = null) {
   assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).engine, 'vela');
   assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).tf, 'MN1');
   assert.equal(d.querySelector('#symKey').textContent,'XAUUSD');
-  assert.equal(d.querySelector('#ticker').textContent,'Deriv');
+  assert.equal(d.querySelector('#brokers'),null);
+  assert.equal(d.querySelector('#ticker'),null);
   w.LabSymbols = [{ticker:'BYBIT_S_BTCUSDT',source:'bybit'}, {ticker:'BINF_BTCUSDT',source:'binance'}];
   assert.equal(w.TradeXMarketName('BYBIT_S_BTCUSDT'),'BTCUSDT');
   assert.equal(w.TradeXMarketSource('BYBIT_S_BTCUSDT'),'Bybit');
@@ -71,6 +72,13 @@ async function mount(mobile = false, oldState = null) {
   assert.equal(w.HubCandleColor('#123456',0),'#12345600');
   assert.equal(w.HubCandleColor('#123456',50),'#12345680');
   assert.equal(w.HubCandleColor('#123456',100),'#123456');
+  // Source switching still works from symbol search after removing the top-bar broker buttons.
+  d.querySelector('#symBtn').click(); await delay(30);
+  d.querySelector('.sy-row[data-k="XAUUSD"] .sy-tag[data-b="bybit"]').click();
+  assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).broker,'bybit');
+  d.querySelector('#symBtn').click(); await delay(30);
+  d.querySelector('.sy-row[data-k="XAUUSD"] .sy-tag[data-b="deriv"]').click();
+  assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).broker,'deriv');
   assert.equal(d.querySelector('#dock').hidden,false);
   d.querySelector('[title="Açık grafiği ekle"]').click(); await delay(30);
   assert.equal(d.querySelectorAll('.watch-row').length,1);
@@ -83,14 +91,22 @@ async function mount(mobile = false, oldState = null) {
   assert.equal(d.querySelectorAll('.watch-row').length,2);
   d.querySelectorAll('.watch-open')[1].click();
   assert.equal(d.querySelector('#symKey').textContent,'BTCUSDT');
-  assert.equal(d.querySelector('#ticker').textContent,'Bybit');
   assert.equal(JSON.parse(w.localStorage.getItem('chartHub')).ticker,'BYBIT_BTCUSDT');
   d.querySelector('[data-panel="settings"]').click();
+  const section = title => [...d.querySelectorAll('#dock details.set')].find(x => x.querySelector('summary').textContent === title);
+  const toggle = title => section(title).querySelector('summary').click();
+  assert.equal(d.querySelectorAll('#dock details.set[open]').length,0, 'settings start collapsed');
+  toggle('Tema'); assert.equal(section('Tema').open,true);
+  toggle('Mum gövdesi'); assert.equal(section('Tema').open,false); assert.equal(section('Mum gövdesi').open,true);
+  toggle('Mum gövdesi'); assert.equal(d.querySelectorAll('#dock details.set[open]').length,0);
+  toggle('Mum gövdesi');
   const labels = [...d.querySelectorAll('#dock label')];
   const wick = labels.find(x=>x.textContent.includes('Fitil kalınlığı')).querySelector('select');
   wick.value='3'; wick.dispatchEvent(new w.Event('change'));
   const color = labels.find(x=>x.textContent.includes('Yükseliş fitili')).querySelector('input');
   color.value='#123456'; color.dispatchEvent(new w.Event('input'));
+  toggle('Mum renk opaklığı');
+  assert.equal(section('Mum gövdesi').open,false);
   const opacity = d.querySelector('[aria-label="Yükseliş gövdesi opaklığı"]');
   assert.equal(opacity.value,'100'); opacity.value='0'; opacity.dispatchEvent(new w.Event('input'));
   assert.equal(opacity.parentElement.querySelector('output').textContent,'0%');
@@ -103,11 +119,18 @@ async function mount(mobile = false, oldState = null) {
   d.querySelector('.watch-remove').click();
   assert.equal(JSON.parse(w.localStorage.getItem('chartHubWatchlist')).length,1);
   d.querySelector('[data-panel="settings"]').click(); await delay(30);
+  assert.equal(d.querySelectorAll('#dock details.set[open]').length,0);
+  toggle('Mum renk opaklığı');
   assert.equal(d.querySelector('[aria-label="Yükseliş gövdesi opaklığı"]').value,'0');
   assert.equal(d.querySelector('[aria-label="Düşüş fitili opaklığı"]').value,'45');
+  toggle('Mum gövdesi');
   [...d.querySelectorAll('#dock button')].find(x => x.textContent === 'Mum ayarlarını sıfırla').click();
+  assert.equal(section('Mum gövdesi').open,true, 'active section remains open after rerender');
   assert.equal(d.querySelector('[aria-label="Yükseliş gövdesi opaklığı"]').value,'100');
   assert.equal(w.HubSettingsLoad().candleStyle.wickDownOpacity,100);
+  toggle('Hakkında');
+  assert.match(section('Hakkında').querySelector('a').href,/0xinspectorx0\/open-source-tradingview/);
+  assert.equal(d.querySelector('#bar a[href*="github.com"]'),null);
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
   dom.window.close();
   ({dom,w,d,errors} = await mount(true));
