@@ -146,9 +146,14 @@ if (LabEmbedded && VelaLab.registerWidgetAction) {
 function velaTheme() { const t = HubTheme; return { background: t.bg, textColor: t.text, gridColor: t.grid, borderColor: t.line, upColor: t.up, downColor: t.down, fontFamily: t.font }; }
 // Candle colours: one saved value (TradeX Settings, theme overrides "up"/"down"), editable in TWO places that stay in
 // step (2026-11-25): the Settings panel on the right and Vela's own Chart settings (Symbol > Candles body / bar colours).
-// Border and wick rows stay hidden: they always follow the body colours.
+// Border and wick colours and opacities are configured in TradeX settings.
 const CANDLE_COLOUR_ROWS = ["symbol.style.candles.borders", "symbol.style.candles.wick"];
-let resettingColours = 0;
+let resettingColours = 0, applyingHubTheme = false;
+// Vela's colour picker emits #RRGGBB or #RRGGBBAA.
+function candleParts(value) {
+  const m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(String(value || ""));
+  return m ? { color: "#" + m[1].toLowerCase(), opacity: m[2] ? Math.round(parseInt(m[2], 16) * 100 / 255) : 100 } : null;
+}
 function guardCandleColours(chart) {
   if (!LabEmbedded || chart.hubGuarded) return;
   chart.hubGuarded = true;
@@ -159,15 +164,24 @@ function guardCandleColours(chart) {
     '<span style="font:600 13px var(--font,system-ui,sans-serif);letter-spacing:.02em">TradeX</span></span>'); } catch (e) { console.warn("attribution", e); }
   try { chart.renderer.setSettingsVisibility({ hidden: CANDLE_COLOUR_ROWS }); } catch (e) { console.warn("settings rows", e); }
   try { chart.renderer.onConfigChanged(() => {
-    const cfg = chart.renderer.getConfig(), c = cfg.candles || {}, b = cfg.bars || {};
+    if (applyingHubTheme) return; // applyConfig synchronously fires this callback; don't save our own changes back.
+    const cfg = chart.renderer.getConfig(), c = cfg.candles || {}, b = cfg.bars || {}, cur = HubSettingsLoad();
+    const expectedUp = HubCandleColor(HubTheme.up, cur.candleStyle.bodyUpOpacity).toLowerCase();
+    const expectedDown = HubCandleColor(HubTheme.down, cur.candleStyle.bodyDownOpacity).toLowerCase();
     let up = c.upColor, down = c.downColor;
-    if (b.upColor && b.upColor !== HubTheme.up && up === HubTheme.up) up = b.upColor;
-    if (b.downColor && b.downColor !== HubTheme.down && down === HubTheme.down) down = b.downColor;
-    if ((!up || up === HubTheme.up) && (!down || down === HubTheme.down)) return;
-    const cur = HubSettingsLoad();
-    if (Date.now() - resettingColours < 1500) { delete cur.overrides.up; delete cur.overrides.down; }   // Vela "Reset defaults" = back to the theme
-    else { if (up) cur.overrides.up = up.slice(0, 7); if (down) cur.overrides.down = down.slice(0, 7); }
-    HubSettingsSave(cur); HubThemeApply(); applyTheme();   // every chart in the grid
+    if (String(up || "").toLowerCase() === expectedUp && b.upColor && b.upColor.toLowerCase() !== HubTheme.up.toLowerCase()) up = b.upColor;
+    if (String(down || "").toLowerCase() === expectedDown && b.downColor && b.downColor.toLowerCase() !== HubTheme.down.toLowerCase()) down = b.downColor;
+    const upChanged = up && String(up).toLowerCase() !== expectedUp, downChanged = down && String(down).toLowerCase() !== expectedDown;
+    const upParts = upChanged && candleParts(up), downParts = downChanged && candleParts(down);
+    if (!upParts && !downParts) return;
+    if (Date.now() - resettingColours < 1500) {
+      delete cur.overrides.up; delete cur.overrides.down;
+      cur.candleStyle.bodyUpOpacity = cur.candleStyle.bodyDownOpacity = 100;
+    } else {
+      if (upParts) { cur.overrides.up = upParts.color; cur.candleStyle.bodyUpOpacity = upParts.opacity; }
+      if (downParts) { cur.overrides.down = downParts.color; cur.candleStyle.bodyDownOpacity = downParts.opacity; }
+    }
+    HubSettingsSave(cur); HubThemeApply(); applyTheme();
     try { parent.postMessage({ evt: "theme:changed" }, location.origin); } catch (_) {}
   }); } catch (e) { console.warn("config guard", e); }
 }
@@ -190,8 +204,10 @@ function colorChart(chart) {
       grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
       crosshair: { color: t.dim, labelBackground: t.raised },
       priceScale: { borderColor: t.line }, panes: { separatorColor: t.line },
-      candles: { upColor: t.up, downColor: t.down, bodyVisible: c.bodyVisible, borderVisible: c.borderVisible, wickVisible: c.wickVisible,
-        borderUpColor: c.borderUp || t.up, borderDownColor: c.borderDown || t.down, wickUpColor: c.wickUp || t.up, wickDownColor: c.wickDown || t.down },
+      candles: { upColor: HubCandleColor(t.up, c.bodyUpOpacity), downColor: HubCandleColor(t.down, c.bodyDownOpacity),
+        bodyVisible: c.bodyVisible, borderVisible: c.borderVisible, wickVisible: c.wickVisible,
+        borderUpColor: HubCandleColor(c.borderUp || t.up, c.borderUpOpacity), borderDownColor: HubCandleColor(c.borderDown || t.down, c.borderDownOpacity),
+        wickUpColor: HubCandleColor(c.wickUp || t.up, c.wickUpOpacity), wickDownColor: HubCandleColor(c.wickDown || t.down, c.wickDownOpacity) },
       bars: { upColor: t.up, downColor: t.down },
       line: { color: t.accent }, area: { lineColor: t.accent, topColor: hexA(t.accent, 0.28), bottomColor: hexA(t.accent, 0.02) },
       baseline: { topLineColor: t.up, bottomLineColor: t.down, topFillColor: hexA(t.up, 0.25), bottomFillColor: hexA(t.down, 0.25) },
@@ -209,8 +225,12 @@ function colorChart(chart) {
   } catch (e) { console.warn("volume colours", e); }
 }
 function applyTheme() {
-  try { ws.setTheme(velaTheme()); } catch (e) { console.warn("setTheme", e); }
-  (ws.cells ? ws.cells() : [ws.active]).forEach((c) => c && c.chart && colorChart(c.chart));
+  if (applyingHubTheme) return;
+  applyingHubTheme = true;
+  try {
+    try { ws.setTheme(velaTheme()); } catch (e) { console.warn("setTheme", e); }
+    (ws.cells ? ws.cells() : [ws.active]).forEach((c) => c && c.chart && colorChart(c.chart));
+  } finally { applyingHubTheme = false; }
 }
 const VELA_TF = { M1: "1", M5: "5", M15: "15", M30: "30", H1: "60", H4: "240", D1: "1D", W1: "1W", MN1: "1M" };
 function build(layout) {

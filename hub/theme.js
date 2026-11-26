@@ -32,6 +32,8 @@ function hexA(hex, a) { // "#rrggbb" + alpha -> rgba()
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
+// Canvas and WebGL both accept #RRGGBBAA; keep opaque colours in their original form.
+window.HubCandleColor = (hex, opacity) => opacity >= 100 ? hex : hex + Math.round(opacity * 255 / 100).toString(16).padStart(2, "0");
 window.HubSettingsLoad = () => {
   let s = {};
   try { s = JSON.parse(localStorage.getItem("chartHubTheme") || "{}"); } catch (_) {}
@@ -39,8 +41,12 @@ window.HubSettingsLoad = () => {
   const wm = Number.isFinite(+s.watermark) && s.watermark !== null && s.watermark !== "" ? Math.max(0, Math.min(40, +s.watermark)) : 5;
   const c = s.candleStyle && typeof s.candleStyle === "object" ? s.candleStyle : {};
   const color = (v) => /^#[0-9a-f]{6}$/i.test(v || "") ? v : null;
+  const opacity = (v) => v !== null && v !== "" && Number.isFinite(Number(v)) ? Math.round(Math.max(0, Math.min(100, Number(v)))) : 100;
   const candleStyle = { bodyVisible: c.bodyVisible !== false, borderVisible: c.borderVisible !== false, wickVisible: c.wickVisible !== false,
     borderUp: color(c.borderUp), borderDown: color(c.borderDown), wickUp: color(c.wickUp), wickDown: color(c.wickDown),
+    bodyUpOpacity: opacity(c.bodyUpOpacity), bodyDownOpacity: opacity(c.bodyDownOpacity),
+    borderUpOpacity: opacity(c.borderUpOpacity), borderDownOpacity: opacity(c.borderDownOpacity),
+    wickUpOpacity: opacity(c.wickUpOpacity), wickDownOpacity: opacity(c.wickDownOpacity),
     wickWidth: Number.isFinite(+c.wickWidth) && +c.wickWidth >= 1 && +c.wickWidth <= 5 ? +c.wickWidth : 1.5 };
   return { preset: HubPresets[s.preset] ? s.preset : (window.TX_DEFAULT_PRESET || "graphite"), font: HubFonts[s.font] ? s.font : "system", overrides: s.overrides || {}, indicatorBars: !!s.indicatorBars, watermark: wm, candleStyle, candleLook: ["flat", "lift", "matte", "matte_lift"].includes(s.candleLook) ? s.candleLook : "flat" };
 };
