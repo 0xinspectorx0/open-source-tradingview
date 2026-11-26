@@ -146,12 +146,14 @@ def build():
         if STATIC.match(f):
             shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
     shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "*.sql", "__pycache__", "*.bak*"))
-    head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script><script src="web/auth_web.js"></script>'
+    head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script>'
     for page in PAGES:
         p = os.path.join(OUT, page)
         html = DESKTOP_ONLY.sub("", open(p, encoding="utf-8").read())
-        if page == "index.html":                        # the web entry = the sign-in page itself, at "/" (clean address)
-            html = root_signin()
+        if page == "index.html":                        # the web entry opens the app directly (no sign-in)
+            html = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                    '<meta http-equiv="refresh" content="0; url=/hub">'
+                    '<title>TradeX</title></head><body style="background:#0a0a0b"></body></html>')
         else:
             i = html.find("<head>")
             if i < 0:
@@ -159,15 +161,15 @@ def build():
             html = html[: i + 6] + head + '<meta name="viewport" content="width=device-width, initial-scale=1">' + html[i + 6:]
         open(p, "w", encoding="utf-8", newline="\n").write(html)
     patch_candles(os.path.join(OUT, "vela.bundle.js"))
-    # Old sign-in address forwards to "/" (bookmarks keep working on every host).
+    # Old sign-in address forwards to the app (bookmarks keep working on every host).
     open(os.path.join(OUT, "web", "signin.html"), "w", encoding="utf-8", newline="\n").write(
-        '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/' + '">'
-        '<link rel="canonical" href="/"></head><body style="background:#0a0a0b"><a href="/" style="color:#e8ecee">Open TradeX</a></body></html>')
+        '<!doctype html><html><head><meta charset="utf-8"><title>TradeX</title><meta http-equiv="refresh" content="0; url=/hub">'
+        '<link rel="canonical" href="/hub"></head><body style="background:#0a0a0b"><a href="/hub" style="color:#e8ecee">Open TradeX</a></body></html>')
     # Cloudflare Pages: same headers as vercel.json + old addresses forward (Pages itself drops ".html": /hub.html -> /hub).
     open(os.path.join(OUT, "_headers"), "w", encoding="utf-8", newline="\n").write(
         "/web/data/*\n  Cache-Control: public, max-age=3600\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n")
     open(os.path.join(OUT, "_redirects"), "w", encoding="utf-8", newline="\n").write(
-        "/web/signin.html / 301\n/web/signin / 301\n/index / 301\n")
+        "/web/signin.html /hub 301\n/web/signin /hub 301\n/index /hub 301\n")
     # Unknown address: a real 404 page (Cloudflare Pages would otherwise answer every unknown path with the front page).
     open(os.path.join(OUT, "404.html"), "w", encoding="utf-8", newline="\n").write(
         '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -241,21 +243,6 @@ def patch_candles(path):
            ":e.rect(x.bodyX,E,x.bodyW,M,T))")
     helpers = "var __txL=c=>[c[0]+(1-c[0])*.14,c[1]+(1-c[1])*.14,c[2]+(1-c[2])*.14,c[3]],__txD=c=>[c[0]*.62,c[1]*.62,c[2]*.62,c[3]];" + chr(10)
     open(path, "w", encoding="utf-8", newline=chr(10)).write(helpers + b.replace(old, new, 1))
-
-
-def root_signin():
-    """hub/web/signin.html rewritten to be served at the site root "/" (its files stay under web/)."""
-    s = open(os.path.join(WEB, "signin.html"), encoding="utf-8").read()
-    for a, b in (('"brand/', '"web/brand/'), ('"../hub.html"', '"/hub"'),   # '"brand/' also covers url("brand/
-                 ('"auth_config.json"', '"web/auth_config.json"'), ('src="glitch.js"', 'src="web/glitch.js"'),
-                 ('location.origin + "/hub.html"', 'location.origin + "/hub"')):
-        if a not in s:
-            raise SystemExit(f"signin.html: expected {a!r} (root sign-in rewrite)")
-        s = s.replace(a, b)
-    left = [x for x in ('"brand/', '../hub.html', '"auth_config.json"', '"glitch.js"') if x in s]
-    if left:
-        raise SystemExit(f"signin.html: paths not rewritten for the root page: {left}")
-    return s
 
 
 if __name__ == "__main__":
