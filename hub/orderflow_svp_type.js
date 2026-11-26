@@ -41,6 +41,7 @@
         `&row_size=${s.layout === O.LAYOUTS[1] ? s.rowSize : 0}&va=${s.va}&developing=${s.devPoc || s.devVa ? 1 : 0}`;
     }
     async load(full) {
+      if (!F.TF[this.h.timeframe]) { this.err = 'Haftalık ve aylık dönemler desteklenmiyor'; this.push(); return; }
       if (this.busy) { this.pending = this.pending || full; return; }
       const bars = this.h.bars(); if (!bars.length || this.stopped) return;
       if (full) this.lastFull = Date.now();
@@ -85,7 +86,7 @@
             if (s.devPoc) line(1, d.colors.poc, 1.5);
             if (s.devVa) { line(2, F.rgba(d.colors.dim, 0.9), 1); line(3, F.rgba(d.colors.dim, 0.9), 1); }
             const i = d.info; g.textAlign = "left"; g.font = `${B(11)}px system-ui, sans-serif`; g.fillStyle = F.rgba(d.colors.text, 0.7);
-            g.fillText(!i ? (d.err ? "Profile: no data" : "Profile loading...") : i.source === "real" ? `SVP · REAL · Binance ${i.real_symbol}` : "SVP · ESTIMATED", B(96), Y(a.scale.min) - B(10));
+            g.fillText(!i ? (d.err ? `Profil: ${d.err}` : "Profil yükleniyor...") : i.source === "real" ? `SVP · GERÇEK · Binance ${i.real_symbol}` : "SVP · TAHMİNİ", B(96), Y(a.scale.min) - B(10));
           } catch (e) { console.warn("svp draw", e); }
         },
       };

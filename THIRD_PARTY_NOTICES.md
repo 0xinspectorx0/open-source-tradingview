@@ -4,43 +4,36 @@ This project is AGPL-3.0-only. It bundles or ships the following open-source com
 
 | Component | Version | Licence | Where | Project |
 |---|---|---|---|---|
-| Vela (`@luxalgo/vela`) | 0.9.3 | Apache-2.0 + NOTICE (attribution) | `hub/vela.bundle.js` | https://github.com/luxalgo/vela |
+| Vela (`@luxalgo/vela`) | 0.9.3 | Apache-2.0 + NOTICE (attribution) | `hub/vela.bundle.js`, `hub/vela_locale_tr.js` | https://github.com/luxalgo/vela |
 | Vela-pinets (`@luxalgo/vela-pinets`) | 0.2.18 | AGPL-3.0-only | `hub/vela.bundle.js` | https://github.com/LuxAlgo/Vela-pinets |
 | PineTS (`pinets`) | 0.12.1 | AGPL-3.0-only | `hub/vela.bundle.js` | https://github.com/LuxAlgo/PineTS |
-| Lightweight Charts | 5.2.1 | Apache-2.0 | `hub/vendor/` | https://github.com/tradingview/lightweight-charts |
-| lightweight-charts-drawing | 0.6.2 | MIT | `hub/vendor/` | https://github.com/deepentropy/lightweight-charts-drawing |
-| KLineChart | 9.8.12 | Apache-2.0 | `hub/vendor/` | https://github.com/klinecharts/KLineChart |
-| KLineChart Pro (`@klinecharts/pro`) | 0.1.1 | Apache-2.0 | `hub/vendor/` | https://github.com/klinecharts/pro |
 | BIST symbol snapshot | 2023-10 (commit `556a793`) | MIT | `hub/feeds/_bist_list.py` | https://github.com/ahmeterenodaci/Istanbul-Stock-Exchange--BIST--including-symbols-and-logos |
 
 Licence texts: [LICENSE](LICENSE) (AGPL-3.0), [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt),
-[licenses/MIT-lightweight-charts-drawing.txt](licenses/MIT-lightweight-charts-drawing.txt),
 [licenses/MIT-bist-symbols.txt](licenses/MIT-bist-symbols.txt).
-Notice files: [licenses/NOTICE-vela.txt](licenses/NOTICE-vela.txt), [licenses/NOTICE-klinecharts.txt](licenses/NOTICE-klinecharts.txt).
+Notice file: [licenses/NOTICE-vela.txt](licenses/NOTICE-vela.txt).
 
 ## Attribution requirements you must keep
 
 - **Vela:** every screen that shows a Vela chart must show a visible Vela attribution. The library draws its
   logomark on the chart by default. Do not hide it unless you show "Vela" with a link to https://velacharts.dev
   on the same screen.
-- **Lightweight Charts:** *TradingView Lightweight Charts, Copyright (c) 2019 TradingView, Inc.,
-  https://www.tradingview.com*. A link to https://www.tradingview.com must be available to users. The chart's
-  `attributionLogo` option (on by default, and left on here) satisfies this.
-- **KLineChart:** *KLineChart, Copyright (c) 2019 lihu.*
 
-## Changes to Vela in the web build
+## Changes to Vela
 
-`scripts/build_web.py` (`patch_candles`) changes one line of the web copy of `hub/vela.bundle.js`: candle bodies are
+`build/patch_wick.js` modifies the bundled Vela 0.9.3 output to support a configurable wick width and display-only
+market/source labels. Provider identifiers and data routing remain unchanged. The patch is reapplied by `npm run build`.
+
+In addition, `scripts/build_web.py` (`patch_candles`) changes one line of the web copy of `hub/vela.bundle.js`: candle bodies are
 drawn with a lighter left edge, a darker right edge and a soft shadow (TradeX "Matte 3D + Lift" look). The desktop
 bundle in `hub/` is unchanged.
 
 ## Rebuilding the bundled files
 
-`hub/vela.bundle.js` and `hub/vendor/` are built from the exact versions pinned in `build/package-lock.json`:
+`hub/vela.bundle.js` and the Turkish locale are built from the exact versions pinned in `build/package-lock.json`:
 
 ```bash
 cd build
 npm ci
 npm run build     # -> ../hub/vela.bundle.js (byte-identical to the shipped file with these versions)
-npm run vendor    # -> ../hub/vendor/*
 ```

@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ctx = {window:{}, Date, Math, Map, Number};
+vm.runInNewContext(fs.readFileSync('hub/periods.js','utf8'),ctx);
+const P=ctx.window.TradeXPeriods;
+const ts = d => Date.parse(d+'T00:00:00Z')/1000;
+const b = (d,o,h,l,c,v=1) => ({time:ts(d),open:o,high:h,low:l,close:c,volume:v});
+const bars = [b('2024-01-31',10,12,9,11,3),b('2024-02-01',11,14,10,13,4),b('2024-02-04',13,15,12,14,5),b('2024-02-05',14,16,13,15,6),b('2024-02-29',15,18,14,17,7),b('2024-03-01',17,19,16,18,8)];
+const plain=x=>JSON.parse(JSON.stringify(x));
+assert.deepEqual(plain(P.aggregate(bars,'W1'))[0],{time:ts('2024-01-29'),open:10,high:15,low:9,close:14,volume:12});
+assert.deepEqual(plain(P.aggregate(bars,'MN1'))[1],{time:ts('2024-02-01'),open:11,high:18,low:10,close:17,volume:22});
+assert.equal(P.start(ts('2024-03-01'),'MN1'),ts('2024-03-01'));
+(async()=>{
+  const daily=[]; for(let i=0;i<2200;i++) daily.push({time:ts('2018-01-01')+i*86400,open:i,high:i+2,low:i-1,close:i+1,volume:1});
+  let requests=0;
+  const fetch=async(end,n)=>{requests++;return daily.filter(x=>!end||x.time*1000<=end).slice(-Math.min(n,300));};
+  const got=await P.history(fetch,'MN1',null,36);
+  assert.ok(requests>1); assert.ok(got.length>0);
+  const expected=P.aggregate(daily,'MN1');
+  assert.deepEqual(plain(got),plain(expected.slice(-got.length)), 'page limit must never return a truncated oldest candle');
+  const more=await P.history(fetch,'MN1',got[0].time*1000-1,12);
+  assert.ok(more.length); assert.ok(more.at(-1).time<got[0].time);
+  assert.deepEqual(plain(more),plain(expected.filter(x=>x.time<got[0].time).slice(-more.length)));
+  console.log('Period aggregation and pagination tests passed');
+})().catch(e=>{console.error(e);process.exitCode=1;});

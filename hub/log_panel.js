@@ -47,7 +47,7 @@
   const badge = document.createElement("span");
   badge.id = "logBadge"; badge.title = "Open the backend log"; badge.textContent = "log ...";
   badge.onclick = () => { if (openPanel !== "logs") openPanelByName("logs"); };
-  document.getElementById("status").appendChild(badge);
+  // The lower status strip was removed; the log remains accessible from the rail.
 
   function paintBadge() {
     if (down) { badge.className = "bad"; badge.textContent = "log: server not answering"; return; }

@@ -58,6 +58,7 @@
       if (this.again) { const [x, y] = this.again; this.again = null; this.fetch(x, y); }
     }
     loadVisible() {
+      if (!TF[this.h.timeframe]) { this.err = 'Haftalık ve aylık dönemler desteklenmiyor'; this.loaded = true; this.push(); return; }
       const bars = this.h.bars(); if (!bars.length) return;
       const sec = TF_SEC[TF[this.h.timeframe] || "M5"], n = bars.length;
       const r = this.range || { from: bars[Math.max(0, n - 120)].time, to: bars[n - 1].time };
@@ -67,6 +68,7 @@
     push() { if (!this.stopped) this.h.pushData({ pending: this.pending, candles: this.map, row: this.info ? this.info.row_size : this.row, info: this.info, err: this.err, settings: this.s, sec: TF_SEC[TF[this.h.timeframe] || "M5"] }); }
     onViewport(r) { this.range = r; clearTimeout(this.vt); this.vt = setTimeout(() => this.loadVisible(), 400); }
     onBars() {
+      if (!TF[this.h.timeframe]) { this.loadVisible(); return; }
       const bars = this.h.bars(); if (!bars.length) return;
       if (!this.loaded && !this.busy) { this.loadVisible(); return; }   // style picked before the candles arrived
       const now = Date.now();

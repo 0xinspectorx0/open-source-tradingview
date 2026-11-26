@@ -1,13 +1,14 @@
-// TradeX Symbol Search (2026-11-24): the TradingView-style window for picking an instrument.
+// TradeX Sembol ara (2026-11-24): the TradingView-style window for picking an instrument.
 // Opens from the symbol button in the top bar, or by just typing a letter while on the chart.
 // Tabs = categories (All, Stocks, Funds, Forex, Crypto, Indices, Commodities), a source (broker) filter,
 // ranked results from the server (GET /api/instruments/search, the same call agents use), recent symbols,
 // paging as you scroll. A row click opens it at the current broker when offered; a broker tag opens it there.
 // Picking still goes through the hub's st + push(), so broker memory, variants, layouts and the cover all work.
 (function () {
-  const TYPE = { stock: "stock", fund: "fund", forex: "forex", crypto: "crypto", index: "index", commodity: "commodity", futures: "futures" };
+  const TYPE = { stock: "hisse", fund: "fon", forex: "forex", crypto: "kripto", index: "endeks", commodity: "emtia", futures: "vadeli" };
   const CUR = { USD: "$", EUR: "€", GBP: "£", JPY: "¥", CHF: "Fr", AUD: "A$", CAD: "C$", NZD: "N$", CNH: "¥", HKD: "HK", SGD: "S$", ZAR: "R", MXN: "M$", TRY: "₺", SEK: "kr", NOK: "kr", DKK: "kr", PLN: "zł", INR: "₹" };
   const METAL = { XAU: ["Au", "#b8902c"], XAG: ["Ag", "#8c9196"], XPT: ["Pt", "#7d8a92"], XPD: ["Pd", "#8a8378"], XCU: ["Cu", "#b06a3b"], XAL: ["Al", "#86909a"], XNI: ["Ni", "#7f8a7a"], XPB: ["Pb", "#6f7480"], XZN: ["Zn", "#80868c"] };
+  const CATS = { stock: "Hisseler", fund: "Fonlar", forex: "Forex", crypto: "Kripto", index: "Endeksler", commodity: "Emtia", futures: "Vadeli" };
   const PAGE = 60, RECENT_KEY = "tradexRecentSymbols", PREF_KEY = "tradexSymSearch";
   let S = { cat: "", broker: "", q: "", rows: [], total: 0, seq: 0, hi: 0, busy: false, timer: null };
   try { Object.assign(S, JSON.parse(localStorage.getItem(PREF_KEY) || "{}"), { q: "" }); } catch (_) {}
@@ -18,13 +19,13 @@
 
   function build() {
     const d = document.createElement("div"); d.id = "symDlg"; d.hidden = true;
-    d.innerHTML = `<div class="dlg sy" role="dialog" aria-label="Symbol Search">
-      <div class="dlg-h"><span>Symbol Search</span><button class="dlg-x" title="Close (Esc)">&times;</button></div>
-      <div class="dlg-s sy-s"><input placeholder="Symbol, name, or keyword" spellcheck="false" autocomplete="off" aria-label="Search symbols"><button class="sy-clear" title="Clear" hidden>&times;</button></div>
+    d.innerHTML = `<div class="dlg sy" role="dialog" aria-label="Sembol ara">
+      <div class="dlg-h"><span>Sembol ara</span><button class="dlg-x" title="Kapat (Esc)">&times;</button></div>
+      <div class="dlg-s sy-s"><input placeholder="Sembol, ad veya anahtar kelime" spellcheck="false" autocomplete="off" aria-label="Sembol ara"><button class="sy-clear" title="Temizle" hidden>&times;</button></div>
       <div class="sy-tabs" role="tablist"></div>
-      <div class="sy-bar"><span class="sy-count"></span><select class="sy-src" title="Price source (broker)"></select></div>
+      <div class="sy-bar"><span class="sy-count"></span><select class="sy-src" title="Fiyat kaynağı"></select></div>
       <div class="sy-list" tabindex="-1"></div>
-      <div class="sy-foot"><span>Simply start typing while on the chart to pull up this search box</span><span class="sy-keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> move <kbd>Enter</kbd> open <kbd>Esc</kbd> close</span></div></div>`;
+      <div class="sy-foot"><span>Bu arama kutusunu açmak için grafikte yazmaya başlayın</span><span class="sy-keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> gezin <kbd>Enter</kbd> aç <kbd>Esc</kbd> kapat</span></div></div>`;
     document.body.appendChild(d);
     d.onmousedown = (e) => { if (e.target === d) close(); };
     d.querySelector(".dlg-x").onclick = close;
@@ -33,13 +34,13 @@
     clr.onclick = () => { inp.value = ""; S.q = ""; clr.hidden = true; inp.focus(); load(true); };
     inp.onkeydown = onKey;
     const tabs = d.querySelector(".sy-tabs");
-    [["", "All"], ...((DATA.cats || []).map((c) => [c.id, c.name]))].forEach(([id, n]) => {
+    [["", "Tümü"], ...((DATA.cats || []).map((c) => [c.id, CATS[c.id] || c.name]))].forEach(([id, n]) => {
       const b = document.createElement("button"); b.textContent = n; b.dataset.id = id; b.setAttribute("role", "tab");
       b.onclick = () => { S.cat = id; savePref(); paintTabs(); load(true); inp.focus(); };
       tabs.appendChild(b);
     });
     const src = d.querySelector(".sy-src");
-    src.add(new Option("All sources", ""));
+    src.add(new Option("Tüm kaynaklar", ""));
     DATA.brokers.forEach((b) => src.add(new Option(b.name, b.id)));
     src.onchange = () => { S.broker = src.value; savePref(); load(true); inp.focus(); };
     const list = d.querySelector(".sy-list");
@@ -54,7 +55,7 @@
     const d = D() || build();
     const inp = d.querySelector(".sy-s input");
     S.onPick = typeof onPick === "function" ? onPick : null;
-    inp.placeholder = S.onPick ? "Compare with: symbol, name, or keyword" : "Symbol, name, or keyword";
+    inp.placeholder = S.onPick ? "Karşılaştır: sembol, ad veya anahtar kelime" : "Sembol, ad veya anahtar kelime";
     inp.value = text || ""; S.q = inp.value.trim(); d.querySelector(".sy-clear").hidden = !inp.value;
     if (S.broker && !DATA.brokers.some((b) => b.id === S.broker)) S.broker = "";
     d.querySelector(".sy-src").value = S.broker;
@@ -75,7 +76,7 @@
     const u = `/api/instruments/search?q=${encodeURIComponent(S.q)}&cat=${S.cat}&broker=${S.broker}&offset=${S.rows.length}&limit=${PAGE}`;
     let r;
     try { r = await (await fetch(u)).json(); }
-    catch (e) { if (seq === S.seq) { S.busy = false; paintList("Chart server not answering: start START_CHART_LAB.bat"); } return; }
+    catch (e) { if (seq === S.seq) { S.busy = false; paintList("Grafik sunucusu yanıt vermiyor"); } return; }
     if (seq !== S.seq) return;
     S.busy = false; S.total = r.total; S.rows = S.rows.concat(r.results);
     paintList();
@@ -84,22 +85,22 @@
 
   function paintList(err) {
     const d = D(), L = d.querySelector(".sy-list"), keep = L.scrollTop, firstPage = S.rows.length <= PAGE;
-    const catName = S.cat ? (DATA.cats.find((c) => c.id === S.cat) || {}).name.toLowerCase() : "symbols";
-    d.querySelector(".sy-count").textContent = err ? "" : `${S.total.toLocaleString()} ${catName}${S.q ? ` matching "${S.q}"` : ""}`;
+    const catName = S.cat ? (CATS[S.cat] || S.cat).toLocaleLowerCase("tr") : "sembol";
+    d.querySelector(".sy-count").textContent = err ? "" : `${S.total.toLocaleString()} ${catName}${S.q ? ` eşleşme: "${S.q}"` : ""}`;
     L.innerHTML = "";
     if (err) { L.innerHTML = `<div class="dlg-empty">${esc(err)}</div>`; return; }
     // Recent symbols on top of an empty search (All tab, any source that has them).
     if (!S.q && !S.cat) {
       const rec = recent().map((k) => inst(k)).filter((i) => i && (!S.broker || i.brokers[S.broker]));
       if (rec.length) {
-        L.insertAdjacentHTML("beforeend", `<div class="sy-gh">Recent</div>`);
+        L.insertAdjacentHTML("beforeend", `<div class="sy-gh">Son kullanılanlar</div>`);
         rec.forEach((i) => L.appendChild(row(i, true)));
-        L.insertAdjacentHTML("beforeend", `<div class="sy-gh">All symbols</div>`);
+        L.insertAdjacentHTML("beforeend", `<div class="sy-gh">Tüm semboller</div>`);
       }
     }
     S.rows.forEach((i) => L.appendChild(row(i)));
-    if (!S.rows.length) L.insertAdjacentHTML("beforeend", `<div class="dlg-empty">No symbol matches${S.q ? ` "${esc(S.q)}"` : ""}${S.cat ? " in this tab" : ""}${S.broker ? " at this source" : ""}. Try All, or All sources.</div>`);
-    else if (S.rows.length < S.total) L.insertAdjacentHTML("beforeend", `<div class="sy-more">Scroll for more (${(S.total - S.rows.length).toLocaleString()} left)</div>`);
+    if (!S.rows.length) L.insertAdjacentHTML("beforeend", `<div class="dlg-empty">Eşleşen sembol bulunamadı${S.q ? `: "${esc(S.q)}"` : ""}. Tüm kaynakları deneyin.</div>`);
+    else if (S.rows.length < S.total) L.insertAdjacentHTML("beforeend", `<div class="sy-more">Daha fazlası için kaydırın (${(S.total - S.rows.length).toLocaleString()} kaldı)</div>`);
     markHi();
     if (!firstPage) L.scrollTop = keep;
   }
@@ -107,7 +108,7 @@
   function row(i, isRecent) {
     const r = document.createElement("div"); r.className = "sy-row" + (i.key === st.key ? " cur" : ""); r.dataset.k = i.key;
     const tags = DATA.brokers.filter((b) => i.brokers[b.id]).map((b) =>
-      `<button class="sy-tag${b.id === st.broker && i.key === st.key ? " on" : ""}" data-b="${b.id}" title="Open at ${esc(b.name)}">${shortOf(b.id)}</button>`).join("");
+      `<button class="sy-tag${b.id === st.broker && i.key === st.key ? " on" : ""}" data-b="${b.id}" title="${esc(b.name)} kaynağında aç">${shortOf(b.id)}</button>`).join("");
     r.innerHTML = `${logo(i)}<span class="sy-sym">${hl(i.key)}</span><span class="sy-desc">${hl(i.name)}</span>`
       + `<span class="sy-type">${TYPE[i.cat] || ""}</span><span class="sy-tags">${tags}</span>`;
     r.onclick = (e) => { const t = e.target.closest(".sy-tag"); choose(i.key, t ? t.dataset.b : null); };

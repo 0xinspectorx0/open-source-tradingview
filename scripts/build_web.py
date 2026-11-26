@@ -18,7 +18,7 @@ WEB = os.path.join(HUB, "web")
 DATA = os.path.join(WEB, "data")
 OUT = os.path.join(ROOT, "web_dist")
 WEB_FEEDS = {"binance", "bybit", "deriv", "coinbase", "kraken", "okx"}
-PAGES = ("hub.html", "vela.html", "lightweight.html", "klinechart.html", "index.html")
+PAGES = ("hub.html", "vela.html", "index.html")
 # Desktop-only scripts left out of the web copy (they need the server: order flow, backend log terminal).
 DESKTOP_ONLY = re.compile(r'<script src="(log_panel)\.js"></script>\n?')   # order flow runs in the browser (web/orderflow_web.js)
 STATIC = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:html|js|css|png|svg|ico|woff|woff2)$")
@@ -173,15 +173,12 @@ def build():
     if os.path.isdir(link):
         shutil.rmtree(keep, ignore_errors=True); shutil.move(link, keep)
     shutil.rmtree(OUT, ignore_errors=True)
-    os.makedirs(os.path.join(OUT, "vendor"))
+    os.makedirs(OUT)
     if os.path.isdir(keep):
         shutil.move(keep, link)
     for f in os.listdir(HUB):                          # same allow-list as the desktop server's static files
         if STATIC.match(f) and ".bak" not in f and os.path.isfile(os.path.join(HUB, f)):
             shutil.copy2(os.path.join(HUB, f), OUT)
-    for f in os.listdir(os.path.join(HUB, "vendor")):
-        if STATIC.match(f):
-            shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
     shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "*.sql", "__pycache__", "*.bak*"))
     add_bist_web_lists(os.path.join(OUT, "web", "data"))
     head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script>'
@@ -248,7 +245,7 @@ def source_stamp():
         if not sha:
             sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
                                  timeout=20).stdout.strip()
-        st = subprocess.run(["git", "status", "--porcelain", "--", "hub", "scripts", "functions", "LICENSE", "NOTICE",
+        st = subprocess.run(["git", "status", "--porcelain", "--", "hub", "build", "scripts", "functions", "LICENSE", "NOTICE",
                              "THIRD_PARTY_NOTICES.md", "TRADEMARK.md"], cwd=ROOT, capture_output=True, text=True,
                             timeout=20).stdout
         dirty = [ln[3:] for ln in st.splitlines() if ln.strip()]
