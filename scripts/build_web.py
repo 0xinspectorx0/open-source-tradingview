@@ -127,6 +127,43 @@ def scan(folder):
     return hits
 
 
+def add_bist_web_lists(folder):
+    """Add only bundled public BIST symbols, never a user's TRADEX_DATA CSV."""
+    sys.path.insert(0, HUB)
+    from feeds.bist import STOCKS, SNAPSHOT_STOCKS, VIOP
+    stocks = dict(SNAPSHOT_STOCKS)
+    for code, name in STOCKS:
+        stocks.setdefault(code, name)
+    rows = [(code, name, "stock") for code, name in stocks.items()]
+    rows += [("XU100", "BIST 100", "index"), ("XU030", "BIST 30", "index")]
+    rows += [(code, name + " (VIOP: availability unverified)", "futures") for code, name in VIOP if code not in stocks]
+    sym_path = os.path.join(folder, "symbols.json")
+    inst_path = os.path.join(folder, "instruments.json")
+    with open(sym_path, encoding="utf-8") as f:
+        syms = json.load(f)
+    with open(inst_path, encoding="utf-8") as f:
+        inst = json.load(f)
+    # Keep rebuilds deterministic and prevent duplicates if upstream lists later add BIST.
+    syms["symbols"] = [s for s in syms["symbols"] if s.get("source") != "bist"]
+    inst["brokers"] = [b for b in inst["brokers"] if b["id"] != "bist"]
+    inst["brokers"].append({"id": "bist", "name": "BIST (Yahoo, delayed)", "short": "BIS"})
+    by_key = {i["key"]: i for i in inst["instruments"]}
+    for code, name, group in rows:
+        key, ticker = f"{code}.IS", f"BIST_{code}"
+        syms["symbols"].append({"ticker": ticker, "name": f"{name} ({key})", "source": "bist", "group": group})
+        item = by_key.get(key)
+        if not item:
+            item = {"key": key, "name": name, "group": group, "cat": group, "brokers": {}}
+            inst["instruments"].append(item)
+            by_key[key] = item
+        item["brokers"]["bist"] = [{"ticker": ticker, "label": "delayed"}]
+    if not any(c["id"] == "futures" for c in inst["cats"]):
+        inst["cats"].append({"id": "futures", "name": "Futures"})
+    for path, value in ((sym_path, syms), (inst_path, inst)):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(value, f, ensure_ascii=False, separators=(",", ":"))
+
+
 def build():
     for f in ("symbols.json", "instruments.json"):
         if not os.path.isfile(os.path.join(DATA, f)):
@@ -146,6 +183,7 @@ def build():
         if STATIC.match(f):
             shutil.copy2(os.path.join(HUB, "vendor", f), os.path.join(OUT, "vendor"))
     shutil.copytree(WEB, os.path.join(OUT, "web"), ignore=shutil.ignore_patterns("*.py", "*.sql", "__pycache__", "*.bak*"))
+    add_bist_web_lists(os.path.join(OUT, "web", "data"))
     head = '<script src="web/feeds_web.js"></script><script src="web/orderflow_web.js"></script><script src="web/api_shim.js"></script>'
     for page in PAGES:
         p = os.path.join(OUT, page)
@@ -210,7 +248,7 @@ def source_stamp():
         if not sha:
             sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
                                  timeout=20).stdout.strip()
-        st = subprocess.run(["git", "status", "--porcelain", "--", "hub", "scripts", "LICENSE", "NOTICE",
+        st = subprocess.run(["git", "status", "--porcelain", "--", "hub", "scripts", "functions", "LICENSE", "NOTICE",
                              "THIRD_PARTY_NOTICES.md", "TRADEMARK.md"], cwd=ROOT, capture_output=True, text=True,
                             timeout=20).stdout
         dirty = [ln[3:] for ln in st.splitlines() if ln.strip()]

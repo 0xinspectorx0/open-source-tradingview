@@ -112,11 +112,12 @@ python hub/server.py
 
 Then open <http://localhost:8770/hub.html>. On Windows you can double-click `start.bat` instead.
 
-## Borsa İstanbul shares (desktop only)
+## Borsa İstanbul shares
 
 The desktop hub includes a BIST source using Yahoo Finance's unofficial, delayed reference prices; availability,
 latency, history and usage are subject to Yahoo's coverage and terms. Search for a ticker such as `THYAO` and select
-**BIST (Borsa İstanbul)**. The browser-only web beta does not support this feed (Yahoo does not provide browser CORS).
+**BIST (Borsa İstanbul)**. The web beta can use BIST only if its optional Cloudflare Pages Function is deployed;
+Yahoo does not provide browser CORS. See [web beta setup](docs/WEB_BETA.md#optional-bist-support-on-mobile-and-desktop-browsers).
 The built-in search list contains a 2023 snapshot of more than 500 symbols plus some extra names; it can contain
 renamed or delisted companies, and a search result does **not** mean Yahoo currently has candles for it. It is not
 an exhaustive or up-to-date BIST listing. Yahoo VIOP symbols in this plugin may not exist or return data; BIST indices
