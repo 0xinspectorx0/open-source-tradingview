@@ -10,7 +10,12 @@ This plugin is server-side only (the Vela/Lightweight/KLineChart engines and the
 desktop hub). The web build (Vercel/Cloudflare) fetches from the browser, where
 Yahoo does not send CORS headers, so BIST is not in the pre-built web lists.
 """
+import csv
+import os
+import re
+
 from .base import get_json, bar, resample, TF_SEC
+from ._bist_list import STOCKS as SNAPSHOT_STOCKS
 
 MANIFEST = {
     "id": "bist", "name": "BIST (Borsa İstanbul)", "short": "BIS",
@@ -27,7 +32,7 @@ YF = {"M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m", "H1": "60m", "H4": "60
 # How many points Yahoo keeps for each interval (it rejects wider requests).
 MAX_POINTS = {"1m": 10080, "5m": 17280, "15m": 5760, "30m": 2880, "60m": 2000, "1d": 365 * 5}
 
-# Major Borsa İstanbul equities (BIST 30 + well-known names). ticker, name.
+# Additional names not in the bundled 2023 snapshot. ticker, name.
 STOCKS = [
     ("THYAO", "Türk Hava Yolları"), ("ASELS", "Aselsan"), ("GARAN", "Garanti BBVA"),
     ("KCHOL", "Koç Holding"), ("BIMAS", "BİM Mağazalar"), ("EREGL", "Ereğli Demir Çelik"),
@@ -56,17 +61,44 @@ VIOP = [
 ]
 
 
+_CODE = re.compile(r"[A-Z0-9]{1,12}\Z")
+
+
+def _extra_stocks():
+    """Optional user-maintained CSV: code,name (in TRADEX_DATA or repo/data)."""
+    data = os.environ.get("TRADEX_DATA") or os.path.join(os.path.dirname(__file__), "..", "..", "data")
+    try:
+        with open(os.path.join(data, "bist_symbols.csv"), encoding="utf-8-sig", newline="") as f:
+            for row in csv.reader(f):
+                if not row:
+                    continue
+                code = row[0].strip().upper().removesuffix(".IS")
+                if not _CODE.fullmatch(code) or code == "SYMBOL" or code == "CODE":
+                    continue
+                name = row[1].strip() if len(row) > 1 else code
+                yield code, (name or code)[:200]
+    except (OSError, csv.Error, UnicodeError):
+        return
+
+
 def symbols():
+    # Snapshot can contain delisted or renamed companies; it is not a promise of Yahoo coverage.
+    stocks = dict(SNAPSHOT_STOCKS)
+    for code, name in STOCKS:
+        stocks.setdefault(code, name)
+    stocks.update(_extra_stocks())
     eq = [{"ticker": f"{PREFIX}{c}", "name": f"{n} ({c}.IS)", "group": "stock", "key": f"{c}.IS"}
-          for c, n in STOCKS]
+          for c, n in stocks.items()]
     vi = [{"ticker": f"{PREFIX}{c}", "name": f"{n} ({c})", "group": "futures", "key": f"{c}.IS"}
-          for c, n in VIOP]
+          for c, n in VIOP if c not in stocks]
     return eq + vi
 
 
 def _yf_symbol(symbol):
-    # symbol is the plugin ticker, e.g. "BIST_THYAO"
-    code = symbol.split("_", 1)[1] if symbol.startswith(PREFIX) else symbol
+    # Validate before incorporating the ticker into a URL.
+    code = symbol[len(PREFIX):] if symbol.startswith(PREFIX) else symbol
+    if not _CODE.fullmatch(code):
+        raise ValueError("Invalid BIST symbol")
     return code + ".IS"
 
 

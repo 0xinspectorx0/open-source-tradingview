@@ -112,6 +112,30 @@ python hub/server.py
 
 Then open <http://localhost:8770/hub.html>. On Windows you can double-click `start.bat` instead.
 
+## Borsa İstanbul shares (desktop only)
+
+The desktop hub includes a BIST source using Yahoo Finance's unofficial, delayed reference prices; availability,
+latency, history and usage are subject to Yahoo's coverage and terms. Search for a ticker such as `THYAO` and select
+**BIST (Borsa İstanbul)**. The browser-only web beta does not support this feed (Yahoo does not provide browser CORS).
+The built-in search list contains a 2023 snapshot of more than 500 symbols plus some extra names; it can contain
+renamed or delisted companies, and a search result does **not** mean Yahoo currently has candles for it. It is not
+an exhaustive or up-to-date BIST listing. Yahoo VIOP symbols in this plugin may not exist or return data; BIST indices
+and reliable VIOP coverage are not provided by this list.
+
+To add missing share codes, create `data/bist_symbols.csv` (or `bist_symbols.csv` in `TRADEX_DATA` if configured)
+in UTF-8, one code and optional name per line, then restart the hub. Examples:
+
+```csv
+symbol,name
+THYAO,Türk Hava Yolları
+EXAMPLE,Example company
+```
+
+The optional `.IS` suffix is accepted; entries are looked up on Yahoo as `<code>.IS`. Adding a code does not verify
+that it exists or that data is available. `data/` is local and is not committed. If BIST was disabled by setup after
+a failed connection test, set `"bist": true` in `data/sources.json` (or the `TRADEX_DATA` equivalent) and restart;
+this does not bypass connectivity or Yahoo restrictions.
+
 ## Connect MetaTrader 5 (optional)
 
 **MT5 on this Windows PC:** install MetaTrader 5, log in to your account, then run `pip install MetaTrader5`

@@ -11,9 +11,11 @@ This project is AGPL-3.0-only. It bundles or ships the following open-source com
 | lightweight-charts-drawing | 0.6.2 | MIT | `hub/vendor/` | https://github.com/deepentropy/lightweight-charts-drawing |
 | KLineChart | 9.8.12 | Apache-2.0 | `hub/vendor/` | https://github.com/klinecharts/KLineChart |
 | KLineChart Pro (`@klinecharts/pro`) | 0.1.1 | Apache-2.0 | `hub/vendor/` | https://github.com/klinecharts/pro |
+| BIST symbol snapshot | 2023-10 (commit `556a793`) | MIT | `hub/feeds/_bist_list.py` | https://github.com/ahmeterenodaci/Istanbul-Stock-Exchange--BIST--including-symbols-and-logos |
 
 Licence texts: [LICENSE](LICENSE) (AGPL-3.0), [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt),
-[licenses/MIT-lightweight-charts-drawing.txt](licenses/MIT-lightweight-charts-drawing.txt).
+[licenses/MIT-lightweight-charts-drawing.txt](licenses/MIT-lightweight-charts-drawing.txt),
+[licenses/MIT-bist-symbols.txt](licenses/MIT-bist-symbols.txt).
 Notice files: [licenses/NOTICE-vela.txt](licenses/NOTICE-vela.txt), [licenses/NOTICE-klinecharts.txt](licenses/NOTICE-klinecharts.txt).
 
 ## Attribution requirements you must keep
