@@ -131,7 +131,7 @@ function renderOnChart(L) {
   INDS.forEach((ind) => {
     const row = document.createElement("div"); row.className = "dlg-row chart";
     const status = busy[ind.key] ? "yükleniyor..." : ind.on && liveIds[ind.key] ? (ind.pending ? "grafik verisi bekleniyor" : "grafikte") : ind.on ? (st.engine === "vela" ? "grafik bekleniyor" : "needs the Vela engine") : "gizli";
-    const conv = ind.convFrom ? ` · converted from Pine v${ind.convFrom}` : ind.pine ? ` · Pine v${ind.pine}` : "";
+    const conv = ind.convFrom ? ` · converted from Pine v${esc(ind.convFrom)}` : ind.pine ? ` · Pine v${esc(ind.pine)}` : "";
     row.innerHTML = `<input type="checkbox" ${ind.on ? "checked" : ""} title="Grafikte göster">
       <div class="nm">${esc(ind.name)}</div><div class="sub">${esc(ind.origin)}${conv} · ${esc(status)}${ind.license ? " · " + esc(ind.license) : ""}</div>
       ${ind.err ? `<div class="msg bad">${esc(ind.err)}</div>` : ""}${ind.notes && ind.notes.length ? `<div class="msg">Converter: ${esc(ind.notes.join("; "))}</div>` : ""}

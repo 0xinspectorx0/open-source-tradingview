@@ -24,7 +24,7 @@ class Loader extends ResourceLoader {
     return done(fs.readFileSync(file));
   }
 }
-async function mount(mobile = false, oldState = null, savedLayout = false) {
+async function mount(mobile = false, oldState = null, savedLayout = false, favorites = null) {
   const errors = [], virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', e => errors.push(e));
   const dom = new JSDOM(fs.readFileSync(path.join(root,'hub.html'), 'utf8'), {
@@ -33,6 +33,7 @@ async function mount(mobile = false, oldState = null, savedLayout = false) {
       w.matchMedia = () => ({matches:!mobile}); w.alert = () => {}; w.focus = () => {}; w.Element.prototype.scrollIntoView = () => {};
       if (oldState) w.localStorage.setItem('chartHub', JSON.stringify(oldState));
       if (savedLayout) w.localStorage.setItem('chartHubLayoutId', 'saved');
+      if (favorites !== null) w.localStorage.setItem('chartHubTimeframeFavorites', favorites);
       w.fetch = async input => {
         const u = new URL(input, w.location.href), p = u.pathname;
         if (p === '/api/instruments') return {ok:true, json:async()=>data};
@@ -57,20 +58,44 @@ async function mount(mobile = false, oldState = null, savedLayout = false) {
   assert.equal(d.querySelector('#status'), null);
   assert.equal(d.querySelector('#engines'), null);
   assert.match(d.querySelector('#frame').src, /vela\.html\?.*tf=W1/);
-  const timeframes = d.querySelector('#tfs');
-  assert.equal(timeframes.tagName,'SELECT');
-  assert.equal(timeframes.value,'W1');
-  assert.equal(timeframes.querySelector('option[value="MN1"]').textContent,'A');
-  assert.deepEqual([...timeframes.options].map(o=>o.value),['M1','M5','M15','M30','H1','H4','D1','W1','MN1']);
+  const timeframes = d.querySelector('#tfs'), menu=d.querySelector('#tfMenu');
+  assert.equal(timeframes.tagName,'BUTTON');
+  assert.equal(timeframes.textContent,'H ▾');
+  assert.equal(menu.hidden,true); assert.equal(d.querySelectorAll('#tfFavorites button').length,0);
+  timeframes.click(); assert.equal(menu.hidden,false); assert.equal(timeframes.getAttribute('aria-expanded'),'true');
+  assert.deepEqual([...menu.querySelectorAll('.tf-choice')].map(o=>o.dataset.id),['M1','M5','M15','M30','H1','H4','D1','W1','MN1']);
+  assert.equal(d.activeElement.dataset.id,'W1');
   const chartWindow=d.querySelector('#frame').contentWindow, sent=[];
   chartWindow.labChart={setMarket(){}};
   chartWindow.postMessage=(message)=>sent.push(message);
-  timeframes.value='MN1'; timeframes.dispatchEvent(new w.Event('change'));
-  assert.equal(timeframes.value,'MN1');
+  const star = id=>menu.querySelector(`.tf-star[data-id="${id}"]`);
+  star('MN1').click(); star('M5').click(); star('W1').click();
+  assert.equal(sent.length,0,'starring a timeframe does not change the chart');
+  assert.equal(menu.hidden,false); assert.equal(star('MN1').getAttribute('aria-pressed'),'true');
+  assert.deepEqual([...d.querySelectorAll('#tfFavorites button')].map(b=>b.dataset.id),['M5','W1','MN1']);
+  assert.equal(d.querySelector('#tfFavorites [data-id="W1"]').getAttribute('aria-pressed'),'true');
+  assert.deepEqual(JSON.parse(w.localStorage.getItem('chartHubTimeframeFavorites')),['M5','W1','MN1']);
+  menu.querySelector('.tf-choice[data-id="MN1"]').click();
+  assert.equal(menu.hidden,true); assert.equal(timeframes.textContent,'A ▾');
   assert.equal(sent.at(-1).cmd,'set'); assert.equal(sent.at(-1).tf,'MN1');
   w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,data:{evt:'market',symbol:'frxXAUUSD',tf:'D1'}}));
-  assert.equal(timeframes.value,'D1','external chart timeframe updates the dropdown');
-  timeframes.value='MN1'; timeframes.dispatchEvent(new w.Event('change'));
+  assert.equal(timeframes.textContent,'G ▾','external chart timeframe updates the dropdown');
+  assert.equal(d.querySelector('#tfFavorites [data-id="MN1"]').getAttribute('aria-pressed'),'false');
+  d.querySelector('#tfFavorites [data-id="MN1"]').click();
+  assert.equal(sent.at(-1).tf,'MN1');
+  assert.equal(d.querySelector('#tfFavorites [data-id="MN1"]').getAttribute('aria-pressed'),'true');
+  timeframes.click(); star('W1').focus(); star('W1').click();
+  assert.equal(d.activeElement,star('W1'),'focus remains on star after toggling');
+  assert.equal(d.querySelector('#tfFavorites [data-id="W1"]'),null);
+  menu.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  assert.equal(menu.hidden,true); assert.equal(d.activeElement,timeframes);
+  timeframes.click();
+  assert.equal(d.activeElement.dataset.id,'MN1');
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+  assert.equal(d.activeElement.dataset.id,'M1');
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+  assert.equal(d.activeElement.dataset.id,'M5');
+  menu.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
   assert.equal(d.querySelector('#layout option[value=""]').textContent,'1 Pencere');
   assert.equal(d.querySelector('#lyBtn .nm').textContent,'Şablonlar');
   assert.equal(d.querySelector('#symName'),null);
@@ -159,10 +184,20 @@ async function mount(mobile = false, oldState = null, savedLayout = false) {
   assert.equal(d.querySelector('#bar a[href*="github.com"]'),null);
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
   dom.window.close();
-  ({dom,w,d,errors} = await mount(true));
+  ({dom,w,d,errors} = await mount(true, null, false, '["MN1","M5","MN1","invalid"]'));
   assert.equal(d.querySelector('#dock').hidden,true);
   d.querySelector('[data-panel="watchlist"]').click(); assert.equal(d.querySelector('#dock').hidden,false);
-  assert.equal(d.querySelector('#tfs').tagName,'SELECT');
+  assert.deepEqual([...d.querySelectorAll('#tfFavorites button')].map(b=>b.dataset.id),['M5','MN1'],'saved favourites restore, deduplicate and sort on mobile');
+  d.querySelector('#tfs').click();
+  assert.equal(d.querySelector('#tfMenu .tf-star[data-id="MN1"]').getAttribute('aria-pressed'),'true');
+  d.querySelector('#tfMenu .tf-star[data-id="MN1"]').click();
+  assert.deepEqual(JSON.parse(w.localStorage.getItem('chartHubTimeframeFavorites')),['M5']);
+  w.dispatchEvent(new w.StorageEvent('storage',{key:'chartHubTimeframeFavorites',newValue:'["W1","D1"]'}));
+  assert.deepEqual([...d.querySelectorAll('#tfFavorites button')].map(b=>b.dataset.id),['D1','W1'],'other-tab changes update shortcuts');
+  assert.equal(d.querySelector('#tfMenu .tf-star[data-id="W1"]').getAttribute('aria-pressed'),'true');
+  assert.equal(errors.length,0,errors.map(e=>e.message).join('\n')); dom.window.close();
+  ({dom,w,d,errors} = await mount(false, null, false, '{bad json'));
+  assert.equal(d.querySelectorAll('#tfFavorites button').length,0,'invalid stored data is ignored');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n')); dom.window.close();
   ({dom,w,d,errors} = await mount(false, null, true));
   assert.equal(d.querySelector('#lyBtn .nm').textContent,'Şablonlar','saved layout names never replace the button label');

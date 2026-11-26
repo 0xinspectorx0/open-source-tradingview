@@ -122,9 +122,12 @@ internal ticker used to request data is unchanged. OHLC labels and values use a 
 and cream in dark themes, independent of candle colours; the adjacent price change retains its directional colour.
 Price and indicator pane controls use transparent, outlined buttons with thicker icons. In the TradeX shell,
 chart type, indicators, undo/redo, Vela panels and screenshot share the main top bar with market, timeframe and layout.
-The timeframe is selected from a dropdown, and the chart-type icon opens the available styles. The saved-layout and
+The timeframe is selected from a dropdown; star timeframes there to pin quick-switch buttons to the top bar. Favourites
+are saved in the browser independently of layouts. The chart-type icon opens the available styles. The saved-layout and
 indicator-template menu is labelled **Şablonlar**. The bar scrolls horizontally on narrow screens; the standalone
-Vela page retains its own toolbar. Malformed Pine alerts with an object title and no message are forwarded as events
+Vela page retains its own toolbar. The embedded chart settings dialog has a **Kaydet** button that explicitly saves
+all current chart settings and the rest of the active layout, even when layout autosave is off. Settings still apply
+live; the dialog reports an error if the chart is loading or saving fails. Malformed Pine alerts with an object title and no message are forwarded as events
 but do not produce the repeated `[object Object]` notification bubble; meaningful alerts and errors remain visible.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
@@ -132,6 +135,22 @@ to add the current market or **+ Ara** to search. Choose an entry to open its ex
 with ×. The list is saved in the browser, not synced between devices. Prices and percentage changes use the latest
 available daily candles, refreshed approximately once per minute while the panel is open; feeds may be delayed or
 unavailable, in which case the row shows a dash rather than a price.
+
+### Settings JSON backup
+
+In **Ayarlar → Yedekle ve geri yükle**, use **JSON indir** to download a versioned backup, or **JSON yükle** to
+restore one after reviewing the confirmation. The backup includes browser preferences (theme, watchlist, favourites,
+search history, Pine scripts and draft), saved layouts and indicator templates, and a fresh snapshot of the active
+chart, including drawings and unsaved chart changes. Sign-in tokens and unrelated browser data are not included.
+Only import files you trust: they may contain Pine code and personal chart information. Store the file securely.
+
+Import replaces the listed browser preferences, but adds layouts and templates as new copies rather than overwriting
+existing records. If the active chart differs from its last saved layout, both versions are retained. After a
+successful restore the page reloads. If a write fails, the app attempts to roll back new records and browser changes;
+it warns if rollback is incomplete. Backups are limited to 25 MB and 500 saved records; individual stores may have
+smaller limits. Web guests use browser storage for layouts; signed-in web users use their account store, while desktop
+uses the local server's layout store. Browser preferences remain local in all cases, and account/desktop differences
+in available data feeds may affect restored markets.
 
 ## Borsa İstanbul shares
 
