@@ -28,6 +28,20 @@
   #priceStyleMenu button:hover, #priceStyleMenu button:focus-visible, #priceStyleMenu button[aria-checked="true"] { background:var(--raised) }
   #priceStyleMenu button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
   #priceStyleMenu button[aria-checked="true"]::after { content:'✓'; float:right; color:var(--accent) }
+  #tfs { flex:none; min-width:54px; height:28px; padding:4px 7px; border:1px solid var(--line); border-radius:3px; background:var(--bg); color:var(--text); font:inherit; cursor:pointer }
+  #tfs:focus-visible, #tfFavorites button:focus-visible, #tfMenu button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
+  #tfFavorites { display:flex; flex:none; align-items:center; gap:2px }
+  #tfFavorites button { border:0; border-radius:3px; padding:5px 7px; color:var(--dim); background:transparent; font:inherit; white-space:nowrap; cursor:pointer }
+  #tfFavorites button:hover { color:var(--text); background:var(--raised) }
+  #tfFavorites button[aria-pressed="true"] { color:var(--accentInk); background:var(--accent) }
+  #tfMenu { position:fixed; z-index:80; width:min(230px,calc(100vw - 16px)); max-height:min(70vh,420px); overflow:auto; padding:4px; border:1px solid var(--line); border-radius:6px; color:var(--text); background:var(--panel); box-shadow:0 8px 24px #0006 }
+  #tfMenu[hidden] { display:none }
+  #tfMenu .tf-row { display:flex; align-items:center; gap:4px }
+  #tfMenu button { border:0; border-radius:4px; background:transparent; color:var(--text); font:inherit; cursor:pointer }
+  #tfMenu button:hover, #tfMenu .tf-choice[aria-pressed="true"] { background:var(--raised) }
+  #tfMenu .tf-choice { flex:1; padding:8px 10px; text-align:left }
+  #tfMenu .tf-star { flex:none; width:36px; height:34px; color:var(--dim); font-size:19px; line-height:1 }
+  #tfMenu .tf-star[aria-pressed="true"] { color:var(--accent) }
   .sep { width:1px; height:20px; background:var(--line); flex:none }
   .seg { display:flex; flex:none; gap:1px }
   .seg button { background:transparent; color:var(--dim); border:0; border-radius:3px; padding:5px 8px; font:inherit; cursor:pointer }
@@ -198,7 +212,8 @@
   <button id="symBtn" title="Sembol ara (grafikte yazmaya da başlayabilirsiniz)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg><span id="symKey"></span></button><button id="cmpBtn" title="Sembol karşılaştır veya ekle" aria-label="Sembol karşılaştır veya ekle"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg></button>
   <select id="variant" title="Bu kaynaktaki piyasa türü" hidden></select>
   <span class="sep"></span>
-  <select id="tfs" aria-label="Zaman aralığı" title="Zaman aralığı"></select><span class="sep"></span>
+  <button id="tfs" type="button" aria-label="Zaman aralığı" aria-haspopup="dialog" aria-expanded="false" aria-controls="tfMenu" title="Zaman aralığı">1 dk ▾</button>
+  <div id="tfFavorites" role="group" aria-label="Favori zaman aralıkları"></div><span class="sep"></span>
   <select id="layout" title="Grafik düzeni" aria-label="Pencere düzeni"><option value="">1 Pencere</option><option value="2h">2 yan yana</option><option value="2v">2 alt alta</option><option value="4">4 grafik</option><option value="8">8 grafik</option></select>
   <span class="sep"></span>
   <button id="priceStyle" type="button" aria-label="Grafik tipi" aria-haspopup="menu" aria-expanded="false" aria-controls="priceStyleMenu" title="Grafik tipi" disabled><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 2v2m0 8v2M11.5 2v1.5m0 7.5v3"/><rect x="2.8" y="4" width="3.4" height="8" rx=".6"/><rect x="9.8" y="3.5" width="3.4" height="7.5" rx=".6" fill="currentColor"/></svg></button>
@@ -214,6 +229,7 @@
   <button data-panel="settings" title="Ayarlar: tema, renkler, yazı tipi" style="margin-top:auto;margin-bottom:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </nav>
 </div>
+<script src="timeframe_menu.js"></script><script src="settings_backup.js"></script><script src="settings_backup_ui.js"></script>
 <script src="pine_convert.js"></script><script src="pine_style.js"></script><script src="ind_core.js"></script><script src="pine_library.js"></script><script src="ind_dialog.js"></script><script src="pine_editor.js"></script><script src="watchlist.js"></script>
 <script>
 // TradeX: one shell over every broker and every chart engine.
@@ -230,6 +246,7 @@ try { Object.assign(st, JSON.parse(localStorage.getItem("chartHub") || "{}")); }
 st.engine = "vela";
 const save = () => { try { localStorage.setItem("chartHub", JSON.stringify(st)); } catch (_) {} };
 const inst = (k) => DATA.instruments.find((i) => i.key === k);
+const timeframes = TradeXTimeframes.create({ items: TFS, selected: () => st.tf, onSelect: (tf) => { st.tf = tf; push(); } });
 
 async function init() {
   DATA = await (await fetch("/api/instruments")).json();
@@ -238,13 +255,10 @@ async function init() {
     const g = inst("XAUUSD"), b = g && (g.brokers.arm ? "arm" : g.brokers.deriv ? "deriv" : Object.keys(g.brokers)[0]);
     Object.assign(st, b ? { key: "XAUUSD", broker: b, ticker: g.brokers[b][0].ticker } : { key: "XAUUSD", broker: "deriv", ticker: "frxXAUUSD" });
   }
-  TFS.forEach(([id, n]) => { const o = new Option(n, id); if (id === 'W1') o.title = 'Haftalık'; if (id === 'MN1') o.title = 'Aylık'; $("tfs").add(o); });
   pollStatus(); setInterval(pollStatus, 10000);
   paint(); loadEngine();
   if (!openPanel && window.matchMedia('(min-width: 701px)').matches) openPanelByName('watchlist');
 }
-$("tfs").onchange = (e) => { st.tf = e.target.value; push(); };
-
 // Keep the old chart covered while the selected market loads.
 let pending = null, coverTimer = null, coverRetry = null;
 function retryLoad() { clearTimeout(coverRetry); coverRetry = setTimeout(() => { if (pending) loadEngine(); }, 15000); }
@@ -279,7 +293,7 @@ function paint() {
   const i = inst(st.key);
   $("symKey").textContent = TradeXMarketName(st.ticker, st.broker);
   $("layout").disabled = false;
-  $("tfs").value = st.tf;
+  timeframes.sync();
   const opts = (i && i.brokers[st.broker]) || [];
   const v = $("variant"); v.hidden = opts.length < 2; v.innerHTML = "";
   opts.forEach((o) => v.add(new Option(o.label || o.ticker, o.ticker)));
@@ -416,6 +430,8 @@ function renderSettings() {
   const ui = colors("Arayüz", [["bg", "Grafik arka planı"], ["panel", "Paneller ve çubuklar"], ["text", "Yazı"], ["dim", "İkincil yazı"], ["line", "Kenarlıklar"], ["grid", "Izgara çizgileri"], ["accent", "Vurgu (seçim, fiyat)"]]);
   const r = document.createElement("button"); r.className = "reset"; r.textContent = "Renkleri temaya sıfırla";
   r.onclick = () => { HubSettingsSave({ ...HubSettingsLoad(), overrides: {} }); themeChanged(); }; ui.appendChild(r);
+  const backupSection = sec("Yedekle ve geri yükle");
+  TradeXBackupUI.mount(backupSection);
   const about = sec("Hakkında"), legal = document.createElement("div");
   legal.className = "legal";
   legal.innerHTML = 'TradeX’in değiştirilmiş sürümüdür. <a href="https://github.com/0xinspectorx0/open-source-tradingview" target="_blank" rel="noopener">Kaynak kodu (AGPL)</a><br>Based on TradeX by Saifullah Shafin — <a href="https://github.com/saifullahshafin/open-source-tradingview" target="_blank" rel="noopener">orijinal proje</a>';

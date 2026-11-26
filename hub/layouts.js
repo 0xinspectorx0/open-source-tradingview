@@ -10,6 +10,13 @@
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
   let curId = lsGet(LS_ID, ""), curName = "", auto = lsGet(LS_AUTO, "1") === "1";
   let lastChartDoc = null, saveTimer = null, saving = false, dirtyAgain = false, state = "", list = { layouts: [], templates: [] };
+  let backupBusy = false, backupImported = false, layoutOperations = 0;
+  // Operations begun before a backup must finish before it can read or replace the store.
+  const trackOperation = fn => async (...args) => {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
+    layoutOperations++;
+    try { return await fn(...args); } finally { layoutOperations--; }
+  };
   let bootApplied = false, ready = false, confirmDel = null, editing = null;   // ready: the layout is back on screen (no autosave before, or an empty chart would overwrite it)   // editing: "rename" | "saveas" | "template" | null
 
   const api = async (path, body) => {
@@ -20,31 +27,73 @@
   const themeNow = () => { try { return JSON.parse(lsGet("chartHubTheme", "{}")); } catch (_) { return {}; } };
   const summary = () => `${st.key} ${(TFS.find((t) => t[0] === st.tf) || [0, st.tf])[1]} · ${INDS.length} indicator${INDS.length === 1 ? "" : "s"}`;
 
-  async function buildDoc() {
-    if (st.engine === "vela") { const r = await ask("doc:get", {}, 6000); if (r.ok) lastChartDoc = r.doc; }
+  async function buildDoc(requireChart = false) {
+    if (st.engine === "vela") { const r = await ask("doc:get", {}, 6000); if (r.ok && r.doc) lastChartDoc = r.doc; else if (requireChart) throw new Error(r.error || "Grafik verileri alınamadı"); }
     return { v: 1, hub: { key: st.key, broker: st.broker, ticker: st.ticker, tf: st.tf, engine: st.engine },
              grid: $("layout").value || "", theme: themeNow(), inds: cleanInds(), chart: lastChartDoc };
   }
-  async function saveNow(asNew, name) {
-    if (saving) { dirtyAgain = true; return; }
+  async function saveNow(asNew, name, requireChart = false) {
+    if (saving || backupBusy || backupImported) { if (!requireChart && !backupImported) dirtyAgain = true; return { ok: false, error: "Bir kayıt sürüyor veya yedekleme yapılıyor; lütfen tekrar deneyin." }; }
     saving = true; setState("Kaydediliyor...");
+    let result;
     try {
-      const doc = await buildDoc();
+      const doc = await buildDoc(requireChart);
+      if (requireChart && (!ready || (typeof pending !== "undefined" && pending))) throw new Error("Grafik yükleniyor; lütfen tamamlanınca tekrar deneyin.");
       const r = await api("/save", { kind: "layouts", id: asNew ? "" : curId, name: name || curName || "Düzenim", doc, summary: summary() });
+      if (!r.id) throw new Error("Düzen kaydedilemedi");
       curId = r.id; curName = name || curName || "Düzenim"; lsSet(LS_ID, curId); setState("Kaydedildi");
-      refreshList();
-    } catch (e) { setState("Kaydedilemedi: " + e.message); }
-    saving = false;
-    if (dirtyAgain) { dirtyAgain = false; schedule(); }
+      refreshList(); result = { ok: true };
+    } catch (e) { setState("Kaydedilemedi: " + e.message); result = { ok: false, error: e.message }; }
+    finally {
+      saving = false;
+      if (dirtyAgain) { dirtyAgain = false; schedule(); }
+    }
+    return result;
   }
   function schedule() {
+    if (backupImported) return;
+    if (backupBusy) { dirtyAgain = true; return; }
     if (!auto) { setState("Kaydedilmemiş değişiklikler"); return; }
     clearTimeout(saveTimer);
     // Never save while a chart is loading or before the layout was put back: the empty chart would overwrite it.
-    saveTimer = setTimeout(() => { if (!ready || (typeof pending !== "undefined" && pending)) return schedule(); saveNow(false); }, 2500);
+    saveTimer = setTimeout(() => { saveTimer = null; if (!ready || (typeof pending !== "undefined" && pending)) return schedule(); saveNow(false); }, 2500);
   }
   window.layoutsDirty = schedule;
+  // Explicit chart-settings save, even with autosave disabled. Never write a stale or
+  // loading chart document; report failures to the settings dialog instead of closing it.
+  window.layoutsSaveCurrent = async () => {
+    if (!ready || (typeof pending !== "undefined" && pending)) return { ok: false, error: "Grafik yükleniyor; lütfen tamamlanınca tekrar deneyin." };
+    return saveNow(false, undefined, true);
+  };
   window.layoutsReady = () => ready;   // alerts_dialog.js: no drawing checks while a layout is being put back     // hub + indicator code call this on any change
+
+  const backup = TradeXSettingsBackup.create({api, storage:localStorage, currentId:()=>curId, currentName:()=>curName,
+    snapshot:async () => {
+      const doc = await buildDoc(true);
+      if (!ready || (typeof pending !== "undefined" && pending)) throw new Error("Grafik yükleniyor; lütfen tamamlanınca tekrar deneyin.");
+      return JSON.parse(JSON.stringify(doc));
+    }});
+  async function backupOperation(fn, importing) {
+    if (backupBusy || backupImported || saving || layoutOperations) throw new Error("Bir kayıt veya yedekleme işlemi sürüyor; tekrar deneyin.");
+    if (!ready || (typeof pending !== "undefined" && pending)) throw new Error("Grafik yükleniyor; lütfen tamamlanınca tekrar deneyin.");
+    backupBusy = true;
+    const hadTimer = !!saveTimer; clearTimeout(saveTimer); saveTimer = null;
+    try {
+      const result = await fn();
+      if (importing) backupImported = true; // old in-memory state must never autosave over the restored document
+      return result;
+    } finally {
+      backupBusy = false;
+      if (!backupImported && (dirtyAgain || hadTimer)) { dirtyAgain = false; schedule(); }
+    }
+  }
+  window.layoutsExportBackup = () => backupOperation(async () => {
+    const market = JSON.stringify([st.ticker, st.tf, $("layout").value]);
+    const result = await backup.exportData();
+    if (!ready || (typeof pending !== "undefined" && pending) || market !== JSON.stringify([st.ticker, st.tf, $("layout").value])) throw new Error("Grafik yedekleme sırasında değişti; lütfen tekrar deneyin.");
+    return result;
+  }, false);
+  window.layoutsImportBackup = (text) => backupOperation(() => backup.importData(text), true);
 
   // Engine (re)loaded: put the layout's chart document back BEFORE the hub re-adds the indicators.
   // First load or an explicit layout load = whole document; later reloads (Restart chart, engine switch) = drawings only.
@@ -65,6 +114,7 @@
 
   // Load another layout: write its parts where the hub reads them at start, then start fresh.
   async function loadLayout(id) {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
     try {
       if (curId && auto) { clearTimeout(saveTimer); await saveNow(false); }
       const d = await api("?kind=layouts&id=" + encodeURIComponent(id)), doc = d.doc || {};
@@ -75,23 +125,27 @@
     } catch (e) { setState("Yüklenemedi: " + e.message); }
   }
   async function newLayout() {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
     if (curId && auto) { clearTimeout(saveTimer); await saveNow(false); }
     lsSet("chartHubIndicators", "[]");
     const r = await api("/save", { kind: "layouts", name: "New layout", doc: { v: 1, hub: { ...st }, grid: "", theme: themeNow(), inds: [], chart: null }, summary: `${st.key} · 0 indicators` });
     lsSet(LS_ID, r.id); location.reload();
   }
   async function delItem(kind, id) {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
     await api("/delete", { kind, id });
     if (kind === "layouts" && id === curId) { curId = ""; curName = ""; lsSet(LS_ID, ""); }
     confirmDel = null; await refreshList(); render();
   }
   async function saveTemplate(name) {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
     const inds = cleanInds();
     if (!inds.length) { setState("No indicators on the chart to save"); return; }
     await api("/save", { kind: "templates", name, doc: { v: 1, inds }, summary: inds.map((x) => x.name || x.type).join(", ").slice(0, 110) });
     await refreshList(); setState(`Template "${name}" saved`);
   }
   async function applyTemplate(id) {
+    if (backupBusy || backupImported) { setState("Yedekleme sürüyor; lütfen bekleyin."); return; }
     const d = await api("?kind=templates&id=" + encodeURIComponent(id)), stamp = Date.now().toString(36);
     (d.doc && d.doc.inds || []).forEach((x, n) => {
       const ind = { ...x, key: String(x.key || "tpl:x:0").split(":").slice(0, -1).join(":") + ":" + stamp + n, on: true };
@@ -99,6 +153,12 @@
     });
     saveInds(); indChanged(); setState(`Template "${d.name}" added`); schedule();
   }
+
+  loadLayout = trackOperation(loadLayout);
+  newLayout = trackOperation(newLayout);
+  delItem = trackOperation(delItem);
+  saveTemplate = trackOperation(saveTemplate);
+  applyTemplate = trackOperation(applyTemplate);
 
   // ---------- UI: top-bar button + menu ----------
   const css = document.createElement("style");

@@ -25,6 +25,13 @@
   .vela-dialog--settings .vela-dialog-body { min-height: 0 !important; }
   .vela-dialog--settings div:has(> .vela-sd-pane) { min-height: 0 !important; max-height: none !important; }
   .vela-dialog--settings .vela-sd-pane, .vela-dialog--settings .vela-sd-rail { min-height: 0; }
+  .vela-dialog--settings .vela-dialog-footer { flex-wrap:wrap; }
+  .tx-chart-save { height:30px; padding:0 14px; border:1px solid var(--vela-border); border-radius:var(--vela-radius-md); background:var(--vela-surface-sunken); color:var(--vela-fg); font:inherit; cursor:pointer; }
+  .tx-chart-save:hover:not(:disabled) { background:var(--vela-hover); border-color:var(--vela-border-strong); color:var(--vela-fg-bright); }
+  .tx-chart-save:focus-visible { outline:2px solid var(--vela-focus); outline-offset:2px; }
+  .tx-chart-save:disabled { opacity:.6; cursor:wait; }
+  .tx-chart-save-status { color:var(--vela-fg-muted); font-size:12px; white-space:normal; }
+  .tx-chart-save-status[data-error="1"] { color:var(--vela-down); }
   /* Symbol watermark (2026-11-25): Vela lays it OVER the candles (z-index 1). The script below moves it into the plot,
      right after the backdrop layer, so it sits behind the candles; strength comes from Settings (theme.js --tx-wm). */
   .vela-watermark { z-index: auto !important; opacity: var(--tx-wm, 0.05) !important; }
@@ -64,6 +71,7 @@
 <script src="theme.js"></script>
 <script src="periods.js"></script>
 <script src="lab.js"></script>
+<script src="chart_settings_save.js"></script>
 <script src="pine_alert_toast.js"></script>
 <script src="orderflow_delta.js"></script>
 <script src="orderflow_profile.js"></script>

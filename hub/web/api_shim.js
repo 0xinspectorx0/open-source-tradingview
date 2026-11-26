@@ -55,7 +55,7 @@
     try { req = JSON.parse(body || "{}"); } catch (_) { return json({ error: "bad JSON" }, 400); }
     const kind = req.kind || "layouts";
     if (!d[kind]) return json({ error: "kind must be layouts or templates" }, 400);
-    if (path.endsWith("/delete")) { delete d[kind][String(req.id)]; lsSave(d); return json({ ok: true }); }
+    if (path.endsWith("/delete")) { delete d[kind][String(req.id)]; return lsSave(d) ? json({ ok: true }) : json({ error: "this browser's storage is full or blocked" }, 413); }
     if (path.endsWith("/save")) {
       if (!req.doc || typeof req.doc !== "object") return json({ error: "doc must be an object" }, 400);
       const id = String(req.id || "") || Math.random().toString(36).slice(2, 14);
