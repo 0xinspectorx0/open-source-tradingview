@@ -4,7 +4,7 @@
   "outputDirectory": "web_dist",
   "installCommand": "true",
   "framework": null,
-  "cleanUrls": false,
+  "cleanUrls": true,
   "headers": [
     { "source": "/web/data/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] },
     { "source": "/(.*)", "headers": [
