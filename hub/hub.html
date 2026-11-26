@@ -325,6 +325,7 @@ window.addEventListener("message", (e) => {
   if (e.data.evt === "indicators:open") { openIndDlg(); return; }
   if (e.data.evt === "ind:removed") { onLegendRemoved(e.data.id); return; }
   if (e.data.evt === "ind:inputs") { onInputs(e.data); return; }
+  if (e.data.evt === "ind:visibility") { onIndicatorVisibility(e.data); return; }
   if (e.data.evt === "ind:ready") { onReady(e.data); return; }
   if (e.data.evt === "hud") return;
   if (e.data.evt !== "market") return;
@@ -476,5 +477,6 @@ document.getElementById("bar").addEventListener("wheel", (e) => {
 <script src="unified_toolbar.js"></script>
 <script src="log_panel.js"></script>
 <script src="layouts.js"></script>
+<script src="window_sync.js"></script>
 <script src="symbol_search.js"></script>
 </body></html>

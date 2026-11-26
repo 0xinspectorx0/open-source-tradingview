@@ -5,7 +5,8 @@ window.TradeXSettingsBackup = (() => {
     chartHub:'object', chartHubTheme:'object', chartHubIndicators:'array', chartHubFavs:'array',
     chartHubScripts:'array', chartHubDraft:'object', chartHubWatchlist:'array',
     chartHubTimeframeFavorites:'array', tradexDrawFavs:'array', tradexFavBar:'object',
-    tradexSymSearch:'object', tradexRecentSymbols:'array', chartHubLayoutAutosave:'flag', chartHubOrderflowV2:'flag'
+    tradexSymSearch:'object', tradexRecentSymbols:'array', chartHubLayoutAutosave:'flag', chartHubOrderflowV2:'flag',
+    chartHubChartDefaults:'object'
   };
   const MAX_BYTES = 25 * 1024 * 1024, MAX_RECORDS = 500;
   const isObject = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -39,6 +40,8 @@ window.TradeXSettingsBackup = (() => {
     if (data.layouts.length + data.templates.length > MAX_RECORDS) throw new Error('Yedekte çok fazla kayıt var.');
     const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
     for (const key of Object.keys(data.preferences)) if (!has(KEYS, key)) throw new Error('Yedekte bilinmeyen ayar var.');
+    // Version-one backups made before chart defaults existed remain importable.
+    if (!has(data.preferences, 'chartHubChartDefaults')) data.preferences.chartHubChartDefaults = null;
     for (const key of Object.keys(KEYS)) if (!has(data.preferences, key) || !validPref(key, data.preferences[key])) throw new Error(`Geçersiz ayar: ${key}`);
     const c = data.current, doc = c.doc;
     if (typeof c.name !== 'string' || !(c.sourceId === null || typeof c.sourceId === 'string') || !isObject(doc) || !isObject(doc.hub) || !isObject(doc.theme) || !Array.isArray(doc.inds) || !isObject(doc.chart) || !isObject(doc.chart.vela) || !Array.isArray(doc.chart.vela.charts)) throw new Error('Etkin grafik kaydı geçersiz.');

@@ -72,6 +72,8 @@
 <script src="periods.js"></script>
 <script src="lab.js"></script>
 <script src="chart_settings_save.js"></script>
+<script src="chart_defaults.js"></script>
+<script src="chart_indicator_sync.js"></script>
 <script src="pine_alert_toast.js"></script>
 <script src="orderflow_delta.js"></script>
 <script src="orderflow_profile.js"></script>
@@ -149,7 +151,7 @@ const provider = {
   },
 };
 
-let ws;
+let ws, indicatorSync;
 // A Pine barcolor() repaints candle bodies over the user's colours. The hub's setting wins unless "Let indicators recolour candles" is on.
 class HubPineEngine extends VelaLab.PineWorkerEngine {
   execute(req, handlers) {
@@ -271,6 +273,10 @@ function build(layout) {
     // Pine Script runs in its own worker per chart (PineTS via @luxalgo/vela-pinets), so heavy scripts never freeze the chart.
     engines: { pine: () => new HubPineEngine() },
   });
+  // Defaults are applied only to new cells; a restored layout is applied later and wins.
+  if (LabEmbedded) TradeXChartDefaults.applyInitial(ws);
+  indicatorSync = TradeXIndicatorSync(ws, msg => { if (LabEmbedded) window.parent.postMessage(msg, location.origin); });
+  indicatorSync.hookCells();
   // Floating favourites bar for starred drawing tools (drawing_favbar.js).
   try { TradeXFavBar.mount(ws, host); } catch (e) { console.warn("favourites bar", e); }
   try { TradeXAutoFit.mount(ws); } catch (e) { console.warn("order-flow auto fit", e); }
@@ -284,15 +290,13 @@ function build(layout) {
   });
   // An indicator removed from Vela's legend: the hub forgets it too (else it comes back on reload).
   // Settings changed in Vela's dialog: the hub stores the values so they survive a reload.
-  try { ws.chart.on("indicator:inputs", (ev) => { const h = ws.chart.indicators().find((x) => x.id === (ev && ev.id)); if (LabEmbedded && h) window.parent.postMessage({ evt: "ind:inputs", id: h.id, inputs: h.inputValues(), props: h.propValues ? h.propValues() : {} }, location.origin); }); } catch (_) {}
   // Last run per script (plot values): proof that an indicator really produced numbers (click test, status).
   window.lastRuns = {};
   try { ws.chart.on("script:run", (ev) => { if (ev && ev.id) window.lastRuns[ev.id] = { plots: ev.plots || {}, bar: ev.bar, warnings: (ev.warnings || []).length, at: Date.now() }; }); } catch (_) {}
-  try { ws.chart.on("indicator:removed", (ev) => { if (LabEmbedded && ev && ev.id) window.parent.postMessage({ evt: "ind:removed", id: ev.id }, location.origin); }); } catch (_) {}
   ws.chart.on("market:changed", ({ symbol, timeframe }) => LabNotify(String(symbol || "").replace(/^lab:/, ""), LabTF.fromAny(timeframe || "1")));
   // TradeX layouts (2026-11-23): drawings belong to a SYMBOL (TradingView rule), every change wakes the hub's autosave.
   hookCells();
-  try { ws.on("cell:created", () => setTimeout(hookCells, 0)); } catch (_) {}
+  try { ws.on("cell:created", () => setTimeout(() => { hookCells(); indicatorSync.hookCells(); }, 0)); } catch (_) {}
   try { ws.on("state:changed", () => { if (LabEmbedded) window.parent.postMessage({ evt: "doc:dirty" }, location.origin); }); } catch (_) {}
 }
 // ---- TradeX layouts: drawings per symbol + the layout document (2026-11-23, layouts.js in the hub) ----
@@ -300,6 +304,19 @@ function build(layout) {
 const drawBook = {};                       // symbol -> drawings document
 const cellSym = new WeakMap(), hookedCharts = new WeakSet();
 const EMPTY_DRAWINGS = { version: 1, drawings: [] };
+let syncingDrawings = false;
+function syncDrawings(sym, doc, source, announce) {
+  if (!sym || !doc || !Array.isArray(doc.drawings)) return;
+  drawBook[sym] = JSON.parse(JSON.stringify(doc));
+  syncingDrawings = true;
+  try {
+    cellsList().forEach(c => {
+      if (!c || !c.chart || c.chart === source || cellSym.get(c.chart) !== sym) return;
+      if (JSON.stringify(c.chart.drawings.toJSON()) !== JSON.stringify(doc)) c.chart.drawings.fromJSON(doc);
+    });
+  } finally { syncingDrawings = false; }
+  if (announce && LabEmbedded) window.parent.postMessage({evt:'drawings:changed',symbol:sym,doc}, location.origin);
+}
 const bareSym = (s) => String(s || "").replace(/^lab:/, "");
 function cellsList() { try { return ws.cells ? ws.cells() : [ws.active]; } catch (_) { return [ws.active]; } }
 function cellSymbol(chart) {
@@ -315,8 +332,17 @@ function swapDrawings(chart, sym) {
 function hookCells() {
   cellsList().forEach((c) => {
     if (!c || !c.chart || hookedCharts.has(c.chart)) return;
-    hookedCharts.add(c.chart); cellSym.set(c.chart, cellSymbol(c.chart));
-    try { c.chart.on("market:changed", ({ symbol }) => swapDrawings(c.chart, bareSym(symbol))); } catch (_) {}
+    hookedCharts.add(c.chart); const sym = cellSymbol(c.chart); cellSym.set(c.chart, sym);
+    try {
+      // A newly opened cell follows existing drawings for its own market only.
+      const peer = cellsList().find(x => x && x.chart !== c.chart && cellSym.get(x.chart) === sym);
+      const saved = peer ? peer.chart.drawings.toJSON() : drawBook[sym];
+      if (saved) c.chart.drawings.fromJSON(saved);
+      for (const event of ['drawing:created','drawing:edited','drawing:removed']) c.chart.on(event, () => {
+        if (!syncingDrawings) syncDrawings(cellSym.get(c.chart), c.chart.drawings.toJSON(), c.chart, true);
+      });
+      c.chart.on("market:changed", ({ symbol }) => swapDrawings(c.chart, bareSym(symbol)));
+    } catch (_) {}
     // A right mouse-down clears the selection for a moment before the menu opens: keep the last line for 2 s.
     try { c.chart.on("drawing:selected", (ev) => { if (selDrawing) lastSel = { ...selDrawing, at: Date.now() }; selDrawing = ev && ev.id ? { chart: c.chart, id: ev.id } : null; alertChip(); }); } catch (_) {}
   });
@@ -370,7 +396,7 @@ function getDoc() {
   const book = { ...drawBook };
   cellsList().forEach((c) => { try { if (c && c.chart) book[cellSym.get(c.chart) || cellSymbol(c.chart)] = c.chart.drawings.toJSON(); } catch (_) {} });
   for (const k in book) if (!book[k] || !(book[k].drawings || []).length) delete book[k];
-  return { vela, drawBook: book };
+  return { vela, drawBook: book, baseline: indicatorSync.baseline() };
 }
 function applyDoc(doc) {
   try {
@@ -378,6 +404,7 @@ function applyDoc(doc) {
     Object.assign(drawBook, (doc && doc.drawBook) || {});
     if (doc && doc.vela) { const v = JSON.parse(JSON.stringify(doc.vela)); (v.charts || []).forEach((c) => { delete c.indicators; delete c.drawings; }); ws.applyState(v); }
     hookCells();
+    indicatorSync.hookCells(); if (doc && doc.baseline) indicatorSync.applyBaseline(doc.baseline);
     cellsList().forEach((c) => { if (c && c.chart) { const sym = cellSymbol(c.chart); cellSym.set(c.chart, sym); try { c.chart.drawings.fromJSON(drawBook[sym] || EMPTY_DRAWINGS); } catch (e) { console.warn("drawings restore", e); } } });
     applyTheme();
     return { ok: true, drawings: Object.values(drawBook).reduce((n, d) => n + ((d && d.drawings) || []).length, 0) };
@@ -407,39 +434,27 @@ window.labChart = {
   setPriceStyle: (id) => ws.active.setPriceStyle(id),
   // Switch in place: indicators re-run on the new bars; panes, drawings and settings stay.
   // Layout in place (cells keep their state); new cells get the theme colours.
-  setLayout: (layout) => { document.getElementById("layout").value = layout || ""; if (ws.setLayout) { ws.setLayout(layout || "1"); setTimeout(applyTheme, 1500); } else build(layout || ""); },
+  setLayout: (layout) => {
+    document.getElementById("layout").value = layout || "";
+    if (ws.setLayout) {
+      const known = new Set(ws.getState().charts.map(c => c.id));
+      ws.setLayout(layout || "1");
+      if (LabEmbedded) for (const c of ws.cells()) if (!known.has(c.id)) TradeXChartDefaults.applyCell(c);
+      hookCells(); indicatorSync.hookCells(); setTimeout(applyTheme, 1500);
+    } else build(layout || "");
+  },
   applyTheme,
-  // Add a Pine Script indicator to the active chart. Resolves {ok, id, error}.
-  removePine: (id) => {
-    const h = (window.pineHandles || {})[id] || ws.chart.indicators().find((x) => x.id === id);
-    if (h) { h.remove(); if (window.pineHandles) delete window.pineHandles[id]; return true; } return false;
-  },
-  // Vela's own (native, core-computed) indicators: catalog, add.
+  saveDefaults: () => TradeXChartDefaults.save(ws),
+  syncDrawings: (symbol, doc) => syncDrawings(symbol, doc, null, false),
+  clearIndicators: () => indicatorSync.clear(),
+  updateIndicator: (key, inputs, props) => indicatorSync.update(key,inputs,props),
+  syncBaseline: state => indicatorSync.applyBaseline(state),
+  removePine: (id) => indicatorSync.remove(id),
   natives: async () => (await ws.chart.availableNativeIndicators()).map((n) => ({ type: n.type, title: n.title, supported: n.supported, present: n.present, multi: !!n.multiInstance, beta: !!n.beta })),
-  addNative: (type, inputs) => {
-    try {
-      const h = ws.chart.addNativeIndicator(type, inputs ? { inputs } : undefined);
-      if (!h || !h.id) return { ok: false, error: "not available on this chart" };
-      (window.pineHandles = window.pineHandles || {})[h.id] = h; return { ok: true, id: h.id, title: h.title };
-    } catch (e) { return { ok: false, error: String(e.message || e) }; }
-  },
-  // Everything on the chart now (script + native), for the dialog and for the click tests.
-  lastRun: (id) => (window.lastRuns || {})[id] || null,
+  addNative: (type, inputs, key, props) => indicatorSync.addNative(type, inputs, key, props),
+  lastRun: (id) => { const h = indicatorSync.activeHandle(id); return (window.lastRuns || {})[h ? h.id : id] || null; },
   onChart: () => ws.chart.indicators().map((h) => ({ id: h.id, title: h.title, native: h.nativeType || null, visible: h.visible })),
-  addPine: async (source, inputs, props) => {
-    try {
-      const opt = {}; if (inputs && Object.keys(inputs).length) opt.inputs = inputs; if (props && Object.keys(props).length) opt.props = props;
-      const h = ws.chart.addIndicator(source, opt);
-      (window.pineHandles = window.pineHandles || {})[h.id] = h;
-      const res = await new Promise((done) => {
-        const t = setTimeout(() => done({ ok: true, id: h.id, pending: true, note: "no result within 15 s (no chart data yet?)" }), 15000);
-        h.on("ready", () => { clearTimeout(t); done({ ok: true, id: h.id, title: h.title });
-          if (LabEmbedded) window.parent.postMessage({ evt: "ind:ready", id: h.id }, location.origin); });  // also after a late start
-        h.on("error", ({ error }) => { clearTimeout(t); done({ ok: false, id: h.id, error: String(error && error.message || error) }); });
-      });
-      return res;
-    } catch (e) { return { ok: false, error: String(e.message || e) }; }
-  },
+  addPine: (source, inputs, props, key) => indicatorSync.addPine(source, inputs, props, key),
   // 2026-11-24: swap the drawings to the new symbol at once. Vela's own market:changed comes only after the new
   // candles AND its indicators are done (about 5 s with an EMA on), so the old symbol's lines showed on the new chart
   // until then. swapDrawings runs once per change, so the later event does nothing.

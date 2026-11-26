@@ -24,7 +24,15 @@
         status.dataset.error = '1'; status.textContent = 'Kaydedilemedi: ' + (e && e.message || 'Bilinmeyen hata');
       } finally { button.disabled = false; }
     });
-    footer.append(button, status);
+    const defaults = document.createElement('button');
+    defaults.type = 'button'; defaults.className = 'tx-chart-save'; defaults.textContent = 'Varsayılan olarak ayarla';
+    defaults.addEventListener('click', () => {
+      try {
+        if (!window.labChart || !window.labChart.saveDefaults) throw new Error('Grafik hazır değil.');
+        window.labChart.saveDefaults(); delete status.dataset.error; status.textContent = 'Varsayılan ayarlar kaydedildi';
+      } catch (e) { status.dataset.error = '1'; status.textContent = 'Kaydedilemedi: ' + (e && e.message || 'Bilinmeyen hata'); }
+    });
+    footer.append(button, defaults, status);
   }
   function scan(node) {
     if (node.nodeType !== 1) return;
