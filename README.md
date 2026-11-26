@@ -114,9 +114,10 @@ Then open <http://localhost:8770/hub.html>. On Windows you can double-click `sta
 
 ### Candle appearance and watchlist
 
-Open **Settings** (gear on the right) to set rising/falling body, border and wick colours, toggle each part, and
-choose wick thickness. Wick thickness is supported by the Vela engine.
-Settings are saved in the browser. The chart's display labels use the market name and the actual feed name; the
+Open **Settings** (gear on the right) to set rising/falling body, border and wick colours, toggle each part,
+choose wick thickness and adjust each colour's opacity from 0% to 100%. These settings are saved in the browser
+and apply to all Vela charts; the candle reset restores full opacity. Pine scripts allowed to recolour candles can
+override the body colour and its opacity. The chart's display labels use the market name and the actual feed name; the
 internal ticker used to request data is unchanged.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
