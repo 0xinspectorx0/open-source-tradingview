@@ -1,7 +1,7 @@
 # TradeX (The Open Source TradingView)
 
 TradeX is a free, self-hosted, TradingView-style charting app that runs on your own computer.
-It puts one interface over several free market-data feeds and three chart engines. It runs Pine Script
+It puts one interface over several free market-data feeds and the Vela chart engine. It runs Pine Script
 indicators and can also show candles from your own MetaTrader 5 terminal, on this PC or on a VPS.
 
 **Try it in your browser, nothing to install:** [tradex.pages.dev](https://tradex.pages.dev) (web beta:
@@ -21,8 +21,8 @@ free desktop version below.)
 | Four synced charts + favourite drawing tools | Indicators dialog |
 |---|---|
 | ![4 chart layout](docs/screenshots/02_four_chart_layout.png) | ![Indicators](docs/screenshots/03_indicators_dialog.png) |
-| **KLineChart engine** | **Themes, fonts and candle colours** |
-| ![KLineChart](docs/screenshots/04_klinechart_engine.png) | ![Settings](docs/screenshots/06_settings_themes.png) |
+| **Themes, fonts and candle colours** | |
+| ![Settings](docs/screenshots/06_settings_themes.png) | |
 | **Order flow: session volume profile (real Binance trades)** | **Floating favourite-tools bar** |
 | ![Order flow](docs/screenshots/07_order_flow_profile.png) | ![Favourites bar](docs/screenshots/08_favourites_bar.png) |
 
@@ -36,8 +36,8 @@ free desktop version below.)
     (`bridge/mt5_bridge.py`). The bridge only reads candles. It never places orders.
 - **The broker switch keeps the instrument.** Gold stays gold when you move from Deriv to Bybit to MT5.
   Only exact matches are joined, so gold tokens such as PAXG are kept separate from gold spot.
-- **Three chart engines, one switch:** Vela (main engine, with Pine Script, 79 native indicators, 79 drawing
-  tools and layouts of up to 8 synced charts), Lightweight Charts with 86 drawing tools, and KLineChart Pro.
+- **Vela chart engine:** Pine Script, native indicators, drawing tools and layouts of up to 8 synced charts.
+- **Timeframes and locale:** weekly and monthly candles are aggregated from each feed’s daily bars using Monday-start weeks and calendar months (UTC calendar dates). History depth depends on the source. Order-flow footprint, delta and session volume profile do not support these two timeframes. The main interface defaults to Turkish and the chart timezone to Europe/Istanbul; saved layouts may retain their chosen timezone. Some custom plugins and feed messages remain in English.
 - **Deep history:** Vela loads 10,000 candles per chart (more in chart settings > Advanced), and fills any gap
   left by sleep or a reconnect before the next live candle.
 - **Favourite drawing tools:** star a tool in the drawing toolbar and it appears on a small floating bar over the
@@ -112,6 +112,19 @@ python hub/server.py
 
 Then open <http://localhost:8770/hub.html>. On Windows you can double-click `start.bat` instead.
 
+### Candle appearance and watchlist
+
+Open **Settings** (gear on the right) to set rising/falling body, border and wick colours, toggle each part, and
+choose wick thickness. Wick thickness is supported by the Vela engine.
+Settings are saved in the browser. The chart's display labels use the market name and the actual feed name; the
+internal ticker used to request data is unchanged.
+
+The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
+to add the current market or **+ Ara** to search. Choose an entry to open its exact source and market, or remove it
+with ×. The list is saved in the browser, not synced between devices. Prices and percentage changes use the latest
+available daily candles, refreshed approximately once per minute while the panel is open; feeds may be delayed or
+unavailable, in which case the row shows a dash rather than a price.
+
 ## Borsa İstanbul shares
 
 The desktop hub includes a BIST source using Yahoo Finance's unofficial, delayed reference prices; availability,
@@ -159,7 +172,7 @@ security rules. Point your agent at it: *"Read AGENTS.md and set this up for me.
 ```
 hub/        the app: server.py (data + web server), hub.html (the shell), engine pages, Pine tools
 bridge/     mt5_bridge.py: read-only candle bridge for a remote MT5 terminal
-build/      source and build script for hub/vela.bundle.js and hub/vendor (npm)
+build/      source and build script for hub/vela.bundle.js (npm)
 docs/       screenshots
 licenses/   third-party licence and notice files
 NOTICE      copyright and the two extra AGPL terms (attribution, no trademark rights)
@@ -169,9 +182,6 @@ NOTICE      copyright and the two extra AGPL terms (attribution, no trademark ri
 
 - Price and Pine alerts (built privately, not yet ported to run without a server)
 - Accuracy tests: candles against the broker, Pine values against reference values
-- Pine Script on the Lightweight and KLineChart engines (today an indicator stays on and draws when you switch
-  back to Vela; adding one while on another engine switches to Vela)
-- Drawings that carry across engines
 
 ## Licence
 

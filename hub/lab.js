@@ -29,30 +29,32 @@ if (LabEmbedded) {
   document.head.appendChild(st);
 }
 window.LabFeed = (() => {
-  // Leave a 20 px bar at the bottom for the status strip, so it never covers the chart (standalone pages only).
-  const chartBox = document.getElementById("chart");
-  if (chartBox && !LabEmbedded) chartBox.style.bottom = "20px";
   // 2026-11-24: the data port comes from the server (/api/symbols ws_port), so a second copy on other ports
   // (the merged / installed TradeX) never talks to this one.
   const wsUrl = () => `ws://${location.hostname || "localhost"}:${window.LabWSPort || 8765}`;
   const stats = { updates: 0, delays: [], exch: [], srcLag: [], lastAt: 0, firstBarAt: 0, errors: [], status: "" };
   window.labStats = stats;
 
+  async function dailyOrNative(symbol, tf, toMs, limit, source) {
+    const u = `/api/bars?symbol=${encodeURIComponent(symbol)}&tf=${tf}&limit=${limit}&source=${source}` + (toMs ? `&to=${Math.floor(toMs)}` : "");
+    const r = await fetch(u), j = await r.json();
+    if (!r.ok || !Array.isArray(j)) throw new Error(j.error || "Veri alınamadı");
+    return j;
+  }
   async function history(symbol, tf, toMs, limit = 1000, source) {
     source = source || window.srcOf(symbol);
-    const u = `/api/bars?symbol=${encodeURIComponent(symbol)}&tf=${tf}&limit=${limit}&source=${source}` + (toMs ? `&to=${Math.floor(toMs)}` : "");
     const say = (extra) => { if (window.LabEmbedded) setTimeout(() => window.parent.postMessage({ evt: "loaded", symbol, tf, ...extra }, location.origin), 120); };
     try {
-      const r = await fetch(u);
-      const j = await r.json();
-      if (!Array.isArray(j)) throw new Error(j.error || "history failed");
-      say({ bars: j.length });  // TradeX lifts its "Loading" cover only after the new ticker's candles arrived
-      return j; // time in epoch seconds
+      const j = tf === 'W1' || tf === 'MN1'
+        ? await TradeXPeriods.history((end, count) => dailyOrNative(symbol, 'D1', end, count, source), tf, toMs, limit)
+        : await dailyOrNative(symbol, tf, toMs, limit, source);
+      say({ bars: j.length });
+      return j; // epoch seconds
     } catch (e) { say({ error: String(e.message || e) }); throw e; }
   }
 
   // Live candle updates. onBar(bar) gets {time(sec),open,high,low,close,volume}.
-  function live(symbol, tf, onBar, source) {
+  function nativeLive(symbol, tf, onBar, source) {
     source = source || window.srcOf(symbol);
     const ws = new WebSocket(wsUrl());
     ws.onopen = () => ws.send(JSON.stringify({ source, symbol, tf }));
@@ -75,25 +77,33 @@ window.LabFeed = (() => {
     return () => { try { ws.close(); } catch (_) {} };
   }
 
-  const med = (a) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
-  let el;
-  function hud(text) {
-    if (LabEmbedded) { if (text) window.parent.postMessage({ evt: "hud", text }, location.origin); return; }
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "lab-hud";
-      // One-line status strip in its own 20 px bar under the chart (the chart is shrunk to make room).
-      el.style.cssText = "position:fixed;left:0;right:0;bottom:0;height:20px;box-sizing:border-box;z-index:99999;font:11px/19px Consolas,monospace;background:#0b1117;color:#7d8c99;padding:0 10px;border-top:1px solid #26333f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none";
-      document.body.appendChild(el);
-    }
-    if (text) el.textContent = text;
+  function live(symbol, tf, onBar, source) {
+    if (tf !== 'W1' && tf !== 'MN1') return nativeLive(symbol, tf, onBar, source);
+    source = source || window.srcOf(symbol);
+    let active = true, stop = null, timer;
+    const begin = async () => {
+      try {
+        // Seed the current period before subscribing: emitting a lone daily bar would be incorrect.
+        const rows = await dailyOrNative(symbol, 'D1', null, 50, source);
+        if (!active) return;
+        if (!rows.length) throw new Error('Günlük veri yok');
+        const days = new Map(rows.map(b => [b.time, b]));
+        stop = nativeLive(symbol, 'D1', b => {
+          if (!active) return;
+          days.set(b.time, b);
+          const current = TradeXPeriods.start(b.time, tf);
+          for (const t of days.keys()) if (TradeXPeriods.start(t, tf) < current) days.delete(t);
+          const result = TradeXPeriods.aggregate([...days.values()], tf);
+          if (result.length) onBar(result[result.length - 1]);
+        }, source);
+      } catch (_) { if (active) timer = setTimeout(begin, 30000); }
+    };
+    begin();
+    return () => { active = false; clearTimeout(timer); if (stop) stop(); };
   }
-  let lastCount = 0;
-  setInterval(() => {
-    const ups = stats.updates - lastCount; lastCount = stats.updates;
-    const age = stats.lastAt ? Date.now() - stats.lastAt : -1;
-    hud(`updates/s ${ups}   |   last update ${age < 0 ? "-" : age + " ms ago"}   |   source->server ${stats.srcLag.length ? Math.round(med(stats.srcLag)) + " ms" : "-"}   |   server->screen ${Math.round(med(stats.delays))} ms` + (stats.status ? `   |   ${stats.status}` : ""));
-  }, 1000);
+
+  // Feed metrics remain available to diagnostics, without a bottom status strip.
+  function hud(text) { if (text) console.warn(text); }
 
   return { history, live, stats };
 })();
@@ -119,7 +129,7 @@ window.LabDefaultSymbol = (LabSymbols.find((s) => s.source === "arm" && /_XAUUSD
 // and the page reports user changes back with LabNotify (only when embedded).
 window.LabParams = new URLSearchParams(location.search);
 if (LabParams.get("symbol") && LabSymbols.some((s) => s.ticker === LabParams.get("symbol"))) window.LabDefaultSymbol = LabParams.get("symbol");
-window.LabDefaultTF = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"].includes(LabParams.get("tf")) ? LabParams.get("tf") : "M1";
+window.LabDefaultTF = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"].includes(LabParams.get("tf")) ? LabParams.get("tf") : "M1";
 window.LabNotify = (symbol, tf) => { if (LabEmbedded) window.parent.postMessage({ evt: "market", symbol, tf }, location.origin); };
 window.addEventListener("message", (e) => {
   if (e.origin !== location.origin || !e.data || !window.labChart) return;
@@ -145,11 +155,13 @@ window.addEventListener("message", (e) => {
 
 // Timeframe helpers shared by the pages.
 window.LabTF = {
-  list: ["M1", "M5", "M15", "M30", "H1", "H4", "D1"],
-  sec: { M1: 60, M5: 300, M15: 900, M30: 1800, H1: 3600, H4: 14400, D1: 86400 },
+  list: ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"],
+  sec: { M1: 60, M5: 300, M15: 900, M30: 1800, H1: 3600, H4: 14400, D1: 86400, W1: 604800, MN1: 2592000 },
   // Turn anything like "1", "60", "240", "1D", "1h", "15m" into our code.
   fromAny(v) {
     const s = String(v).trim();
+    if (s === 'M' || s === '1M' || s === 'MN1') return 'MN1';
+    if (s === 'W' || s === '1W' || s === 'W1') return 'W1';
     const m = s.match(/^(\d*)\s*([smhdwSMHDW]?)$/);
     if (!m) return "M1";
     const n = parseInt(m[1] || "1", 10), u = m[2].toLowerCase();

@@ -38,6 +38,7 @@
       return `/api/orderflow/delta?symbol=${encodeURIComponent(this.ticker)}&tf=${this.tf}&feed=${this.feed}&from=${from}&to=${to}&source=${SRC_PARAM[this.inputs.source] || "auto"}`;
     }
     async load(full) {
+      if (this.tf === 'W1' || this.tf === 'MN1') { this.error = 'Haftalık ve aylık dönemler desteklenmiyor'; this.emit(); return; }
       const bars = this.ctx.bars();
       if (this.busy) { this.pendingFull = this.pendingFull || full; return; }  // a settings change mid-request runs right after it
       if (!bars.length || this.stopped) return;

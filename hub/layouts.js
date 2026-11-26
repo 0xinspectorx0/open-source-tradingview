@@ -27,18 +27,18 @@
   }
   async function saveNow(asNew, name) {
     if (saving) { dirtyAgain = true; return; }
-    saving = true; setState("Saving...");
+    saving = true; setState("Kaydediliyor...");
     try {
       const doc = await buildDoc();
-      const r = await api("/save", { kind: "layouts", id: asNew ? "" : curId, name: name || curName || "My layout", doc, summary: summary() });
-      curId = r.id; curName = name || curName || "My layout"; lsSet(LS_ID, curId); setState("Saved");
+      const r = await api("/save", { kind: "layouts", id: asNew ? "" : curId, name: name || curName || "Düzenim", doc, summary: summary() });
+      curId = r.id; curName = name || curName || "Düzenim"; lsSet(LS_ID, curId); setState("Kaydedildi");
       refreshList();
-    } catch (e) { setState("Not saved: " + e.message); }
+    } catch (e) { setState("Kaydedilemedi: " + e.message); }
     saving = false;
     if (dirtyAgain) { dirtyAgain = false; schedule(); }
   }
   function schedule() {
-    if (!auto) { setState("Unsaved changes"); return; }
+    if (!auto) { setState("Kaydedilmemiş değişiklikler"); return; }
     clearTimeout(saveTimer);
     // Never save while a chart is loading or before the layout was put back: the empty chart would overwrite it.
     saveTimer = setTimeout(() => { if (!ready || (typeof pending !== "undefined" && pending)) return schedule(); saveNow(false); }, 2500);
@@ -72,7 +72,7 @@
       if (doc.theme) lsSet("chartHubTheme", JSON.stringify(doc.theme));
       lsSet("chartHubIndicators", JSON.stringify(doc.inds || []));
       lsSet(LS_ID, id); location.reload();
-    } catch (e) { setState("Could not load: " + e.message); }
+    } catch (e) { setState("Yüklenemedi: " + e.message); }
   }
   async function newLayout() {
     if (curId && auto) { clearTimeout(saveTimer); await saveNow(false); }
@@ -119,30 +119,30 @@
   #lyMenu .tg{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);text-transform:none;letter-spacing:0;font-size:11.5px}
   #lyMenu .empty{padding:6px 12px 10px;color:var(--dim)}`;
   document.head.appendChild(css);
-  const btnEl = document.createElement("button"); btnEl.id = "lyBtn"; btnEl.title = "Layouts: save and switch whole chart setups; indicator templates";
+  const btnEl = document.createElement("button"); btnEl.id = "lyBtn"; btnEl.title = "Düzenleri kaydet ve değiştir; indikatör şablonları";
   btnEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="nm"></span><span class="st"></span>`;
   $("layout").insertAdjacentElement("afterend", btnEl);
   const menu = document.createElement("div"); menu.id = "lyMenu"; menu.hidden = true; document.body.appendChild(menu);
 
-  function setState(s) { state = s; paintButton(); if (!menu.hidden) { const e = menu.querySelector(".hd .sub"); if (e) e.textContent = s || "All changes saved"; } }
-  function paintButton() { btnEl.querySelector(".nm").textContent = curName || "Layouts"; btnEl.querySelector(".st").textContent = state === "Saving..." ? "saving" : (state.startsWith("Not") ? "!" : ""); }
-  async function refreshList() { try { list = await api(""); const c = list.layouts.find((x) => x.id === curId); if (c) curName = c.name; paintButton(); if (!menu.hidden) render(); return true; } catch (e) { setState("Not loaded: " + e.message); return false; } }
+  function setState(s) { state = s; paintButton(); if (!menu.hidden) { const e = menu.querySelector(".hd .sub"); if (e) e.textContent = s || "Tüm değişiklikler kaydedildi"; } }
+  function paintButton() { btnEl.querySelector(".nm").textContent = curName || "Düzenler"; btnEl.querySelector(".st").textContent = state === "Kaydediliyor..." ? "kaydediliyor" : (state.startsWith("Kaydedilemedi") ? "!" : ""); }
+  async function refreshList() { try { list = await api(""); const c = list.layouts.find((x) => x.id === curId); if (c) curName = c.name; paintButton(); if (!menu.hidden) render(); return true; } catch (e) { setState("Yüklenemedi: " + e.message); return false; } }
   window.layoutsRefresh = refreshList;
   const when = (t) => { const d = new Date(t * 1000); return d.toISOString().slice(0, 16).replace("T", " ") + " UTC"; };
 
   function render() {
     const rows = (kind, items) => items.map((x) => `<div class="row ${kind === "layouts" && x.id === curId ? "cur" : ""}" data-k="${kind}" data-id="${h(x.id)}">
       <div class="m"><div class="n">${h(x.name)}</div><div class="d">${h(x.summary || "")} · ${when(x.saved_at)}</div></div>
-      <button class="x ${confirmDel === kind + x.id ? "sure" : ""}" data-del="1" title="Delete">${confirmDel === kind + x.id ? "Delete?" : "&#x2715;"}</button></div>`).join("");
-    const ed = editing ? `<div class="ed"><input id="lyName" maxlength="60" placeholder="${editing === "template" ? "Template name" : "Layout name"}" value="${editing === "rename" ? h(curName) : ""}">
-      <button class="a p" id="lyOk">${editing === "rename" ? "Rename" : "Save"}</button><button class="a" id="lyCancel">Cancel</button></div>` : "";
-    menu.innerHTML = `<div class="hd"><b>${h(curName || "No layout yet")}</b><div class="sub">${h(state || (curId ? "All changes saved" : "Changes are kept once you save a layout"))}</div></div>
-      <div class="acts"><button class="a p" id="lySave">Save</button><button class="a" id="lySaveAs">Save as new</button>${curId ? '<button class="a" id="lyRename">Rename</button>' : ""}<button class="a" id="lyNew">New blank</button></div>
+      <button class="x ${confirmDel === kind + x.id ? "sure" : ""}" data-del="1" title="Delete">${confirmDel === kind + x.id ? "Sil?" : "&#x2715;"}</button></div>`).join("");
+    const ed = editing ? `<div class="ed"><input id="lyName" maxlength="60" placeholder="${editing === "template" ? "Şablon adı" : "Düzen adı"}" value="${editing === "rename" ? h(curName) : ""}">
+      <button class="a p" id="lyOk">${editing === "rename" ? "Yeniden adlandır" : "Kaydet"}</button><button class="a" id="lyCancel">İptal</button></div>` : "";
+    menu.innerHTML = `<div class="hd"><b>${h(curName || "Henüz düzen yok")}</b><div class="sub">${h(state || (curId ? "Tüm değişiklikler kaydedildi" : "Bir düzen kaydettiğinizde değişiklikler saklanır"))}</div></div>
+      <div class="acts"><button class="a p" id="lySave">Kaydet</button><button class="a" id="lySaveAs">Yeni olarak kaydet</button>${curId ? '<button class="a" id="lyRename">Yeniden adlandır</button>' : ""}<button class="a" id="lyNew">Yeni boş düzen</button></div>
       ${ed}
-      <div class="sec"><span>Layouts</span><label class="tg"><input type="checkbox" id="lyAuto" ${auto ? "checked" : ""}> Autosave</label></div>
-      ${list.layouts.length ? rows("layouts", list.layouts) : '<div class="empty">No saved layouts yet.</div>'}
-      <div class="sec"><span>Indicator templates</span><button class="a" id="lyTpl">Save current indicators</button></div>
-      ${list.templates.length ? rows("templates", list.templates) : '<div class="empty">Save the indicators on this chart as a set, then add the set to any chart in one click.</div>'}`;
+      <div class="sec"><span>Düzenler</span><label class="tg"><input type="checkbox" id="lyAuto" ${auto ? "checked" : ""}> Autosave</label></div>
+      ${list.layouts.length ? rows("layouts", list.layouts) : '<div class="empty">Henüz kayıtlı düzen yok.</div>'}
+      <div class="sec"><span>İndikatör şablonları</span><button class="a" id="lyTpl">Mevcut indikatörleri kaydet</button></div>
+      ${list.templates.length ? rows("templates", list.templates) : '<div class="empty">Bu grafikteki indikatörleri şablon olarak kaydedip diğer grafiklere ekleyin.</div>'}`;
     const on = (id, fn) => { const e = menu.querySelector("#" + id); if (e) e.onclick = fn; };
     on("lySave", () => (curId ? saveNow(false) : (editing = "saveas", render())));
     on("lySaveAs", () => { editing = "saveas"; render(); });
@@ -178,7 +178,7 @@
   // Every chart change inside Vela (drawings, settings, symbol) marks the layout dirty.
   window.addEventListener("message", (e) => { if (e.origin === location.origin && e.data && (e.data.evt === "doc:dirty" || e.data.evt === "market")) schedule(); });
   // Start-up: no current layout but the store has some -> open the most recent one (never make a duplicate).
-  // Truly empty store (first visit) -> create "My layout" from what is on screen, so drawings and indicators survive a
+  // Truly empty store (first visit) -> create "Düzenim" from what is on screen, so drawings and indicators survive a
   // reload out of the box. If the list could not be read, change nothing (no pointer cleared, no layout made).
   const openLatest = () => {
     // one automatic open per tab per minute, so a store that keeps losing the pointer can never cause a reload loop
@@ -194,7 +194,7 @@
     if (!curId) { bootApplied = true; ready = true; setTimeout(async () => {
       if (curId || !(await refreshList())) return;          // read the list again right before creating
       if (list.layouts.length) { openLatest(); return; }
-      saveNow(false, "My layout");
+      saveNow(false, "Düzenim");
     }, 6000); }
     paintButton();
   })();

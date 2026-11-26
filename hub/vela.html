@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>TradeX - Vela engine</title>
+<html lang="tr"><head><meta charset="utf-8"><title>TradeX - Vela engine</title>
 <style>
   html,body{margin:0;height:100%;background:#0f161d;color:#d6dee5;font:13px system-ui,Segoe UI,sans-serif}
   #top{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #26333f;height:31px;box-sizing:border-box}
@@ -45,7 +45,10 @@
 })();
 </script>
 <script src="vela.bundle.js"></script>
+<script src="vela_locale_tr.js"></script>
+<script src="market_display.js"></script>
 <script src="theme.js"></script>
+<script src="periods.js"></script>
 <script src="lab.js"></script>
 <script src="orderflow_delta.js"></script>
 <script src="orderflow_profile.js"></script>
@@ -72,7 +75,9 @@ const provider = {
     // (about 53,000 one-minute candles), paged over the feed. The line only needs the main chart's span, so a
     // compared symbol gets at most the main chart's candle count + 500.
     const isCmp = compareTickers().has(String(ticker).replace(/^lab:/, ""));
-    const want = isCmp ? Math.min(range.limit || 100000, Math.max(lastBars.length, 1000) + 500) : (range.limit || 1000);
+    let want = isCmp ? Math.min(range.limit || 100000, Math.max(lastBars.length, 1000) + 500) : (range.limit || 1000);
+    // Longer periods are assembled from daily data. Limit initial work; scrolling can request older pages.
+    if (tf === 'W1' || tf === 'MN1') want = Math.min(want, tf === 'W1' ? 300 : 120);
     // Feeds cap one reply (remote MT5 5000, Bybit/Binance 1000). Vela treats a short reply as "no older history exists",
     // so page backwards here until we have what Vela asked for, or the feed runs out (2026-11-13).
     let out = [], to = range.to;
@@ -133,7 +138,7 @@ class HubPineEngine extends VelaLab.PineWorkerEngine {
 // Inside the TradeX, Vela's own "Indicators" button opens the hub's single TradingView-style dialog
 // (Vela built-ins + TradingView built-ins + community + own Pine in one place).
 if (LabEmbedded && VelaLab.registerWidgetAction) {
-  VelaLab.registerWidgetAction({ id: "indicators", target: "topbar", align: "left", label: "Indicators", icon: "indicators",
+  VelaLab.registerWidgetAction({ id: "indicators", target: "topbar", align: "left", label: "İndikatörler", icon: "indicators",
     run: () => window.parent.postMessage({ evt: "indicators:open" }, location.origin) });
 }
 // ---- Theme (TradeX settings) ----
@@ -177,7 +182,7 @@ function volAlpha(c) {
   return "6b";
 }
 function colorChart(chart) {
-  const t = HubTheme;
+  const t = HubTheme, c = HubSettingsLoad().candleStyle;
   guardCandleColours(chart);
   try {
     chart.renderer.applyConfig({
@@ -185,7 +190,8 @@ function colorChart(chart) {
       grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
       crosshair: { color: t.dim, labelBackground: t.raised },
       priceScale: { borderColor: t.line }, panes: { separatorColor: t.line },
-      candles: { upColor: t.up, downColor: t.down, borderUpColor: t.up, borderDownColor: t.down, wickUpColor: t.up, wickDownColor: t.down },
+      candles: { upColor: t.up, downColor: t.down, bodyVisible: c.bodyVisible, borderVisible: c.borderVisible, wickVisible: c.wickVisible,
+        borderUpColor: c.borderUp || t.up, borderDownColor: c.borderDown || t.down, wickUpColor: c.wickUp || t.up, wickDownColor: c.wickDown || t.down },
       bars: { upColor: t.up, downColor: t.down },
       line: { color: t.accent }, area: { lineColor: t.accent, topColor: hexA(t.accent, 0.28), bottomColor: hexA(t.accent, 0.02) },
       baseline: { topLineColor: t.up, bottomLineColor: t.down, topFillColor: hexA(t.up, 0.25), bottomFillColor: hexA(t.down, 0.25) },
@@ -206,7 +212,7 @@ function applyTheme() {
   try { ws.setTheme(velaTheme()); } catch (e) { console.warn("setTheme", e); }
   (ws.cells ? ws.cells() : [ws.active]).forEach((c) => c && c.chart && colorChart(c.chart));
 }
-const VELA_TF = { M1: "1", M5: "5", M15: "15", M30: "30", H1: "60", H4: "240", D1: "1D" };
+const VELA_TF = { M1: "1", M5: "5", M15: "15", M30: "30", H1: "60", H4: "240", D1: "1D", W1: "1W", MN1: "1M" };
 function build(layout) {
   const host = document.getElementById("chart");
   if (ws && ws.destroy) ws.destroy();
@@ -217,6 +223,7 @@ function build(layout) {
     // History depth. Vela's default is 500 candles and it does NOT load more when you scroll left, so 1m-15m charts
     // only reached back a few days. More: chart settings > Advanced > Bars to fetch, or the 3M/6M/1Y buttons (2026-11-13).
     bars: 10000,
+    locale: 'tr', messages: window.VelaTurkish, timezone: 'Europe/Istanbul',
     theme: velaTheme(), upColor: HubTheme.up, downColor: HubTheme.down,
     providers: { lab: () => provider }, persist: false,
     // Inside the TradeX wrapper, symbol / timeframe / layout live in the wrapper's bar only (no duplicate controls).
@@ -392,7 +399,7 @@ window.labChart = {
   // candles AND its indicators are done (about 5 s with an EMA on), so the old symbol's lines showed on the new chart
   // until then. swapDrawings runs once per change, so the later event does nothing.
   setMarket: (symbol, tf) => (window.LabDefaultSymbol = symbol, window.LabDefaultTF = tf || LabDefaultTF, swapDrawings(ws.chart, symbol), ws.chart.setMarket({ symbol: "lab:" + symbol, timeframe: VELA_TF[tf] || "1" })),
-  setTF: (t) => ws.chart.setTimeframe ? ws.chart.setTimeframe({ M1: "1", M5: "5", M15: "15", M30: "30", H1: "60", H4: "240", D1: "1D" }[t]) : null,
+  setTF: (t) => ws.chart.setTimeframe ? ws.chart.setTimeframe(VELA_TF[t]) : null,
   addCodeTrendline,
   drawingCount: () => { try { return ws.chart.drawings.all().length; } catch (_) { return -1; } },
   getDoc, applyDoc,

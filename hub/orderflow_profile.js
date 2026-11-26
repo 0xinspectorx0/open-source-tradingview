@@ -46,7 +46,7 @@
   class OrderFlowProfile {
     start(ctx, inputs) {
       this.ctx = ctx; this.inputs = { ...defaults(), ...inputs }; this.sess = new Map(); this.info = null; this.error = null;
-      this.ticker = String(ctx.symbol).replace(/^[a-z]+:/i, ""); this.tf = TF[ctx.timeframe] || "M5";
+      this.ticker = String(ctx.symbol).replace(/^[a-z]+:/i, ""); this.tf = TF[ctx.timeframe];
       this.feed = window.srcOf ? srcOf(this.ticker) : "arm"; this.busy = false; this.lastLive = 0; this.stopped = false;
       this.load(true);
     }
@@ -57,6 +57,7 @@
         `&row_size=${i.layout === LAYOUTS[1] ? i.rowSize : 0}&va=${i.va}&developing=${i.devPoc || i.devVa ? 1 : 0}`;
     }
     async load(full) {
+      if (!this.tf) { this.error = 'Haftalık ve aylık dönemler desteklenmiyor'; this.emit(); return; }
       const bars = this.ctx.bars();
       if (this.busy) { this.pendingFull = this.pendingFull || full; return; }  // a settings change mid-request runs right after it
       if (!bars.length || this.stopped) return;
