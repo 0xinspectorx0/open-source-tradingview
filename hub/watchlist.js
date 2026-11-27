@@ -84,7 +84,7 @@ function paintWatchQuote(item) {
   if (!row || !row.isConnected) return;
   const q = watchQuote(item), price = row.querySelector('.watch-price b'), change = row.querySelector('.watch-price small'), status = row.querySelector('.watch-state');
   const pct = watchPercent(q);
-  price.textContent = Number.isFinite(q.last) ? q.last.toLocaleString(undefined, {maximumFractionDigits:8}) : '—';
+  price.textContent = Number.isFinite(q.last) ? q.last.toLocaleString(undefined, {maximumFractionDigits:7}) : '—';
   change.textContent = Number.isFinite(pct) ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—';
   change.style.color = Number.isFinite(pct) && pct !== 0 ? (pct > 0 ? 'var(--ok)' : 'var(--bad)') : '';
   const stale = q.updatedAt && Date.now() - q.updatedAt > 120000;

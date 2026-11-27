@@ -74,6 +74,7 @@
 <script src="chart_settings_save.js"></script>
 <script src="chart_defaults.js"></script>
 <script src="chart_indicator_sync.js"></script>
+<script src="price_display.js"></script>
 <script src="pine_alert_toast.js"></script>
 <script src="orderflow_delta.js"></script>
 <script src="orderflow_profile.js"></script>
@@ -85,6 +86,7 @@
 <script src="orderflow_autofit.js"></script>
 <script>
 let lastBars = [];
+const priceDisplay = TradeXPriceDisplay.create(() => LabSymbols);
 // Tickers drawn by the hub's + Compare (indicator keys "cmp:<ticker>:<stamp>" in the hub's saved indicator list).
 function compareTickers() {
   try { return new Set(JSON.parse(localStorage.getItem("chartHubIndicators") || "[]").filter((x) => x.origin === "compare" && x.on !== false).map((x) => String(x.key).split(":")[1])); }
@@ -119,6 +121,7 @@ const provider = {
       to = out[0].time - 1;
     }
     if (range.from && !isCmp) out = out.filter((b) => b.time >= range.from);
+    if (!range.to && out.length) priceDisplay.observe(ticker, out, true);
     if (!range.to && !isCmp) { lastBars = out; setTimeout(applyTheme, 400); }  // the volume indicator mounts with the data: colour it then
     return out;
   },
@@ -133,6 +136,7 @@ const provider = {
     };
     return LabFeed.live(ticker, tf, (b) => {
       const bar = { ...b, time: b.time * 1000 };
+      priceDisplay.observe(ticker, [bar]);
       chain = chain.then(async () => {
         // A live candle far after our last one means candles are missing (laptop slept, feed reconnected, or the
         // first load came from a stale cache). Vela does not fill such a hole by itself: fetch the missing candles
@@ -333,6 +337,7 @@ function hookCells() {
   cellsList().forEach((c) => {
     if (!c || !c.chart || hookedCharts.has(c.chart)) return;
     hookedCharts.add(c.chart); const sym = cellSymbol(c.chart); cellSym.set(c.chart, sym);
+    try { if (typeof priceDisplay !== 'undefined') priceDisplay.install(c.chart); } catch (e) { console.warn('price display', e); }
     try {
       // A newly opened cell follows existing drawings for its own market only.
       const peer = cellsList().find(x => x && x.chart !== c.chart && cellSym.get(x.chart) === sym);
