@@ -144,10 +144,25 @@ Malformed Pine alerts with an object title and no message are forwarded as event
 but do not produce the repeated `[object Object]` notification bubble; meaningful alerts and errors remain visible.
 
 The **İzleme listesi** button on the right opens the watchlist (open by default on wider screens). Use **+ Grafik**
-to add the current market or **+ Ara** to search. Choose an entry to open its exact source and market, or remove it
-with ×. The list is saved in the browser, not synced between devices. Prices and percentage changes use the latest
-available daily candles, refreshed approximately once per minute while the panel is open; feeds may be delayed or
-unavailable, in which case the row shows a dash rather than a price.
+to add the current market or **+ Ara** to search. Under **Manuel / toplu ekle**, enter one or more symbols separated
+by commas, semicolons or newlines, then choose **Listeye ekle**. For example: `BIST:THYAO, BIST:GARAN`. **Dosyadan
+ekle** accepts a UTF-8 TXT/CSV symbol list (comma, semicolon or newline separated; an optional single `symbol`/`ticker`
+header is accepted) or a JSON array of symbol strings, or `{key, broker, ticker}` entries. The JSON may also be an
+object with a `symbols` or `watchlist` array. Files are limited to 1 MB and 5,000 input entries.
+
+Symbols are matched against currently available instruments. An instrument key without a source prefers the chart's
+current source; `SOURCE:TICKER` selects a source, and an exact internal ticker can select a specific contract. If a
+symbol is unknown or still ambiguous, it is skipped and reported with suggestions rather than guessed. The operation
+adds to the existing list and reports duplicates and any items that exceed the 500-symbol limit; it never replaces the
+list. Choose an entry to open its exact source and market, or remove it with ×. The list is saved in the browser, not
+synced between devices. For up to 20 visible eligible symbols, the watchlist subscribes to the source's live daily
+candle stream; the last price and its percentage versus the previous daily close update as data arrives. This is a
+session change, not necessarily a rolling 24-hour change. Other visible rows use periodic snapshots; scrolling swaps
+subscriptions, and closing or hiding the panel stops them. The desktop uses a bounded same-origin event stream, while the
+web uses the existing browser feeds. Actual update speed depends on the provider: some feeds poll rather than stream,
+and BIST/Yahoo remains delayed and refreshes about once a minute. Each row shows its status, with the last-update time
+in the price tooltip; a dash means a price or reference close is unavailable, and the last known value can remain visible
+during reconnects.
 
 ### Settings JSON backup
 

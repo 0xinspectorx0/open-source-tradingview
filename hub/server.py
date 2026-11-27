@@ -35,6 +35,7 @@ def load_env(path):
 load_env(os.path.join(HERE, "..", ".env"))
 load_env(os.path.join(HERE, ".env"))
 import layouts_store
+import watchlist_stream
 import logbus, feedlog
 import feeds  # chart-source plugins (hub/feeds/)
 
@@ -126,7 +127,7 @@ async def stream_mt5(ws, symbol, tf):
             sym = mt5_resolve(mt5, symbol)
             if not sym:
                 return None, None, f"Symbol {symbol} not found at this broker."
-            return sym, mt5_bars(mt5, sym, tf, HISTORY), None
+            return sym, mt5_bars(mt5, sym, tf, 2 if getattr(ws, 'watchlist', False) else HISTORY), None
     sym, bars, err = await asyncio.to_thread(setup)
     if err:
         await ws.send(json.dumps({"type": "error", "msg": err}))
@@ -427,7 +428,8 @@ async def stream_arm(ws, symbol, tf):
 # ---------------- Binance (no login) ----------------
 async def stream_binance(ws, symbol, tf):
     bsym, fut = bsym_of(symbol)
-    url = f"{BINANCE_FUT_REST if fut else BINANCE_SPOT_REST}?symbol={bsym}&interval={BINANCE_TF[tf]}&limit={HISTORY}"
+    limit = 2 if getattr(ws, 'watchlist', False) else HISTORY
+    url = f"{BINANCE_FUT_REST if fut else BINANCE_SPOT_REST}?symbol={bsym}&interval={BINANCE_TF[tf]}&limit={limit}"
     try:
         raw = await asyncio.to_thread(lambda: urllib.request.urlopen(url, timeout=15).read())
     except Exception as e:
@@ -436,6 +438,8 @@ async def stream_binance(ws, symbol, tf):
     bars = [{"time": k[0] // 1000, "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
              "close": float(k[4]), "volume": float(k[5])} for k in json.loads(raw)]
     await ws.send(json.dumps({"type": "history", "bars": bars, "source": "binance", "symbol": bsym, "tf": tf}))
+    if not bars:
+        await ws.send(json.dumps({"type": "error", "msg": "Binance: no candles"})); return
     span = TF_SEC[tf]
     cur = dict(bars[-1])
     last_sent = 0.0
@@ -553,7 +557,7 @@ def bybit_history(symbol, tf, limit=HISTORY, to_ms=None):
 async def stream_bybit(ws, symbol, tf):
     cat, sym, kind = bybit_parse(symbol)
     try:
-        bars = await asyncio.to_thread(bybit_history, symbol, tf)
+        bars = await asyncio.to_thread(bybit_history, symbol, tf, 2 if getattr(ws, 'watchlist', False) else HISTORY)
     except Exception as e:
         await ws.send(json.dumps({"type": "error", "msg": f"Bybit history failed: {e}"})); return
     await ws.send(json.dumps({"type": "history", "bars": bars, "source": "bybit", "symbol": symbol, "tf": tf}))
@@ -750,7 +754,7 @@ def deriv_history(symbol, tf, limit=HISTORY, to_ms=None):
 
 async def stream_deriv(ws, symbol, tf):
     try:
-        bars = await asyncio.to_thread(deriv_history, symbol, tf)
+        bars = await asyncio.to_thread(deriv_history, symbol, tf, 2 if getattr(ws, 'watchlist', False) else HISTORY)
     except Exception as e:
         await ws.send(json.dumps({"type": "error", "msg": f"Deriv history failed: {e}"})); return
     await ws.send(json.dumps({"type": "history", "bars": bars, "source": "deriv", "symbol": symbol, "tf": tf}))
@@ -1110,6 +1114,8 @@ def static_allowed(path):
         return False
     return bool(_STATIC_RE.match(p)) and ".bak" not in p and ".." not in p and "\\" not in p
 
+WATCHLIST_CONNECTIONS = threading.BoundedSemaphore(8)
+
 class LabHandler(SimpleHTTPRequestHandler):
     def do_HEAD(self):
         if not static_allowed(self.path):
@@ -1119,6 +1125,34 @@ class LabHandler(SimpleHTTPRequestHandler):
     """Static files plus GET /api/bars?symbol=&tf=&limit=&to=<ms>&source=binance|mt5 and GET /api/symbols."""
     def do_GET(self):
         from urllib.parse import urlparse, parse_qs
+        if urlparse(self.path).path == '/api/watchlist/stream':
+            if self.headers.get('Sec-Fetch-Site') not in (None, 'same-origin', 'none'):
+                return self._json({'error':'forbidden'}, 403)
+            try:
+                q = parse_qs(urlparse(self.path).query)
+                entries = watchlist_stream.parse_entries(q.get('symbols', [''])[0])
+            except ValueError as exc:
+                return self._json({'error':str(exc)}, 400)
+            if not WATCHLIST_CONNECTIONS.acquire(blocking=False):
+                return self._json({'error':'too many watchlist connections'}, 429)
+            try:
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache, no-transform')
+                self.send_header('X-Accel-Buffering', 'no')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                self.connection.settimeout(15)
+                def write(data):
+                    self.wfile.write(data); self.wfile.flush()
+                write(b': connected\n\n')
+                streams = {'binance':stream_binance,'bybit':stream_bybit,'deriv':stream_deriv,'arm':stream_arm,'mt5':stream_mt5}
+                asyncio.run(watchlist_stream.pump(entries, streams.__getitem__, write))
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError, OSError):
+                pass
+            finally:
+                WATCHLIST_CONNECTIONS.release()
+            return
         if self.path.startswith("/api/layouts"):   # saved layouts + indicator templates (layouts_store.py)
             q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
             if q.get("id"):
