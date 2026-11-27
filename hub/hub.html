@@ -70,6 +70,14 @@
   .watch-head strong { font-size:12px; text-transform:uppercase; letter-spacing:.05em }
   .watch-head button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:5px 8px; cursor:pointer }
   .watch-note, .watch-empty { color:var(--dim); font-size:11px; padding:10px 12px; line-height:1.5 }
+  .watch-import { padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px }
+  .watch-import summary { cursor:pointer; font-weight:600; color:var(--text) }
+  .watch-import p { margin:7px 0; line-height:1.4; color:var(--dim) }
+  .watch-import textarea { box-sizing:border-box; width:100%; min-height:64px; resize:vertical; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:7px; font:inherit }
+  .watch-import .watch-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px }
+  .watch-import button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:6px 8px; font:inherit; cursor:pointer }
+  .watch-import button:disabled { opacity:.55; cursor:wait }
+  .watch-import .watch-result { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.45; margin-top:7px; color:var(--dim) }
   .watch-row { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--grid) }
   .watch-row.active { background:var(--raised) }
   .watch-open { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px; flex:1; min-width:0; padding:10px 8px 10px 12px; text-align:left; background:none; border:0; color:var(--text); cursor:pointer }
@@ -230,7 +238,7 @@
 </nav>
 </div>
 <script src="timeframe_menu.js"></script><script src="settings_backup.js"></script><script src="settings_backup_ui.js"></script>
-<script src="pine_convert.js"></script><script src="pine_style.js"></script><script src="ind_core.js"></script><script src="pine_library.js"></script><script src="ind_dialog.js"></script><script src="pine_editor.js"></script><script src="watchlist.js"></script>
+<script src="pine_convert.js"></script><script src="pine_style.js"></script><script src="ind_core.js"></script><script src="pine_library.js"></script><script src="ind_dialog.js"></script><script src="pine_editor.js"></script><script src="watchlist_import.js"></script><script src="watchlist_live.js"></script><script src="watchlist.js"></script>
 <script>
 // TradeX: one shell over every broker and every chart engine.
 // Broker switch keeps the instrument (gold stays gold); engine switch keeps instrument, broker and timeframe.
@@ -448,7 +456,7 @@ function renderFeeds() {
     r.children[0].append(b.name); r.children[1].textContent = s.msg || "-"; d.appendChild(r); });
 }
 function openPanelByName(name) {
-  if (openPanel === 'watchlist') watchSeq++;
+  if (openPanel === 'watchlist') stopWatchlistLive();
   if (name === 'settings' && openPanel !== 'settings') settingsSection = null;
   openPanel = name;
   document.querySelectorAll("#rail button").forEach((x) => x.classList.toggle("on", x.dataset.panel === openPanel));

@@ -44,7 +44,7 @@ async function mount(mobile = false, oldState = null, savedLayout = false, favor
         }
         if (p === '/api/status') return {ok:true,json:async()=>({})};
         if (p === '/api/logs') return {ok:true,json:async()=>({problems:{},errors_15m:0,boot:1})};
-        if (p === '/api/bars') return {ok:true,json:async()=>[{close:100},{close:105}]};
+        if (p === '/api/bars') return {ok:true,json:async()=>[{time:1700000000,close:100},{time:1700086400,close:105}]};
         if (p.startsWith('/api/layouts')) return {ok:true,json:async()=>({layouts:savedLayout ? [{id:'saved', name:'My layout', saved_at:1}] : [], templates:[]})};
         return {ok:true,json:async()=>({})};
       };
