@@ -43,6 +43,7 @@ const tick=()=>new Promise(r=>setTimeout(r,20));
   feedEvents.get('BTCUSD').onBar({time:2,close:90},1100);assert.equal(row.querySelector('.watch-price small').textContent,'-10.00%');assert.equal(row.querySelector('.watch-price small').style.color,'var(--bad)');
   feedEvents.get('BTCUSD').onStatus('disconnected');assert.match(row.querySelector('.watch-state').textContent,/yeniden/);
   waiters.get('BIST_THYAO')({ok:true,json:async()=>[{time:1,close:20},{time:2,close:21}]});await tick();assert.match(d.querySelector('[data-ticker="BIST_THYAO"] .watch-state').textContent,/gecikmeli/);
-  const old=feedEvents.get('BTCUSD').onBar;w.__watch.stopWatchlistLive();assert.ok(stops.includes('BTCUSD'));old({time:2,close:999},1200);assert.equal(row.querySelector('.watch-price b').textContent,'90');
+  feedEvents.get('BTCUSD').onBar({time:2,close:0.000123456789},1200);assert.equal(row.querySelector('.watch-price b').textContent,'0.0001235','watchlist price is capped at seven decimals');
+  const old=feedEvents.get('BTCUSD').onBar;w.__watch.stopWatchlistLive();assert.ok(stops.includes('BTCUSD'));old({time:2,close:999},1300);assert.equal(row.querySelector('.watch-price b').textContent,'0.0001235');
   await tick(); dom.window.close();console.log('Watchlist live tests passed');
 })().catch(e=>{console.error(e.stack||e);process.exitCode=1});

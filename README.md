@@ -36,7 +36,11 @@ free desktop version below.)
     (`bridge/mt5_bridge.py`). The bridge only reads candles. It never places orders.
 - **Choose the price source in symbol search.** Click a source tag beside a result to open the same instrument on that feed.
   Only exact matches are joined, so gold tokens such as PAXG are kept separate from gold spot.
-- **Vela chart engine:** Pine Script, native indicators, drawing tools and layouts of up to 8 synced charts.
+- **Vela chart engine:** Pine Script, native indicators, drawing tools and layouts of up to 8 synced charts. Right-side
+  price labels and watchlist prices show at most seven decimal places. The last-price label uses the instrument's
+  available precision metadata, or estimates it from recent candles if metadata is missing; other axis values retain
+  Vela's adaptive scale precision up to that cap. This only changes display: underlying prices, tick size and indicator
+  calculations are not rounded. Prices smaller than the display resolution can round to zero.
 - **Fullscreen:** use the right-hand **Tam ekran** button to expand the whole workspace; press it again or use the
   browser's exit gesture (such as Esc) to leave. Fullscreen depends on browser support and embedding permissions;
   some mobile browsers, including iPhone Safari, do not support fullscreen for web pages. The web promotion banner is
