@@ -38,7 +38,7 @@ const {JSDOM}=require('../../build/node_modules/jsdom');
   const raw={time:100,open:0.123456789,high:0.234567891,low:0.123456788,close:0.123456789,volume:3};
   w.LabSymbols=[{ticker:'P',group:'crypto'}];w.LabTF={fromAny:()=> 'M1',sec:{M1:60}};
   w.LabFeed={history:async()=>[raw],live:(ticker,tf,cb)=>{w.liveUpdate=cb;return ()=>{};}};
-  w.eval('var lastBars=[]; var priceDisplay=TradeXPriceDisplay.create(()=>LabSymbols); function compareTickers(){return new Set()} function applyTheme(){};'+html.slice(html.indexOf('const provider = {'),html.indexOf('\nlet ws, indicatorSync;'))+'\nwindow.__provider=provider;window.__prices=priceDisplay;');
+  w.eval('var lastBars=[], ws=null; var priceDisplay=TradeXPriceDisplay.create(()=>LabSymbols); function compareTickers(){return new Set()} function applyTheme(){};'+html.slice(html.indexOf('const provider = {'),html.indexOf('\nlet ws, indicatorSync;'))+'\nwindow.__provider=provider;window.__prices=priceDisplay;');
   const bars=await w.__provider.getBars('P','1',{limit:1});assert.equal(bars[0].close,raw.close);assert.equal(w.__prices.precision('P'),7);
   let live;w.__provider.subscribe('P','1',bar=>live=bar);w.liveUpdate({...raw,close:0.123456781});await new Promise(r=>setTimeout(r,5));assert.equal(live.close,0.123456781);assert.equal(raw.close,0.123456789);
   dom.window.close();console.log('Price display tests passed');

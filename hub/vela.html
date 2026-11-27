@@ -121,7 +121,7 @@ const provider = {
       to = out[0].time - 1;
     }
     if (range.from && !isCmp) out = out.filter((b) => b.time >= range.from);
-    if (!range.to && out.length) priceDisplay.observe(ticker, out, true);
+    if (!range.to && out.length && priceDisplay.observe(ticker, out, true)) priceDisplay.refresh(ws, ticker);
     if (!range.to && !isCmp) { lastBars = out; setTimeout(applyTheme, 400); }  // the volume indicator mounts with the data: colour it then
     return out;
   },
@@ -136,7 +136,7 @@ const provider = {
     };
     return LabFeed.live(ticker, tf, (b) => {
       const bar = { ...b, time: b.time * 1000 };
-      priceDisplay.observe(ticker, [bar]);
+      if (priceDisplay.observe(ticker, [bar])) priceDisplay.refresh(ws, ticker);
       chain = chain.then(async () => {
         // A live candle far after our last one means candles are missing (laptop slept, feed reconnected, or the
         // first load came from a stale cache). Vela does not fill such a hole by itself: fetch the missing candles
