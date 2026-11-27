@@ -57,6 +57,10 @@ async function mount(mobile = false, oldState = null, savedLayout = false, favor
   let {dom,w,d,errors} = await mount(false, {engine:'klinechart',key:'XAUUSD',broker:'deriv',ticker:'frxXAUUSD',tf:'W1'});
   assert.equal(d.querySelector('#status'), null);
   assert.equal(d.querySelector('#engines'), null);
+  const fullscreen = d.querySelector('#fullscreenBtn'), dockBefore = d.querySelector('#dock').hidden;
+  assert.ok(fullscreen); fullscreen.click();
+  assert.equal(d.querySelector('#dock').hidden,dockBefore,'fullscreen control does not open or close a panel');
+  assert.match(d.querySelector('#fullscreenStatus').textContent,/kullanılamıyor/,'unsupported environment is explained');
   assert.match(d.querySelector('#frame').src, /vela\.html\?.*tf=W1/);
   const timeframes = d.querySelector('#tfs'), menu=d.querySelector('#tfMenu');
   assert.equal(timeframes.tagName,'BUTTON');

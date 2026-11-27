@@ -96,6 +96,10 @@
   #rail { grid-row:2; grid-column:3; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding-top:6px; gap:4px }
   #rail button { width:30px; height:30px; border:0; border-radius:4px; background:transparent; color:var(--dim); cursor:pointer; display:grid; place-items:center }
   #rail button:hover { background:var(--raised); color:var(--text) } #rail button.on { color:var(--accent); background:var(--raised) }
+  #rail button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
+  #fullscreenBtn[aria-pressed="true"] { color:var(--accent) }
+  #fullscreenStatus { position:fixed; z-index:100001; right:48px; bottom:12px; max-width:min(320px,calc(100vw - 60px)); padding:9px 12px; border:1px solid var(--line); border-radius:4px; background:var(--panel); color:var(--text); box-shadow:0 4px 18px #0008; font-size:12px; line-height:1.4 }
+  #fullscreenStatus[hidden] { display:none }
   .set { border-bottom:1px solid var(--grid) }
   .set summary { list-style:none; display:flex; align-items:center; justify-content:space-between; padding:12px; cursor:pointer; font-size:11px; font-weight:600; color:var(--dim); letter-spacing:.05em; text-transform:uppercase }
   .set summary::-webkit-details-marker { display:none }
@@ -241,9 +245,12 @@
   <button data-panel="indicators" title="İndikatörler, ölçümler ve stratejiler ( / )"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l5-6 4 4 4-7 5 6"/><path d="M3 21h18"/></svg></button>
   <button data-panel="pine" title="Pine düzenleyici: kod yazın, içe aktarın ve grafiğe ekleyin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg></button>
   <button data-panel="feeds" title="Veri kaynakları: bağlantı durumu"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14a8 8 0 0 1 12 0M5.5 11.5a4.5 4.5 0 0 1 7 0"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/></svg></button>
+  <button id="fullscreenBtn" type="button" title="Tam ekran" aria-label="Tam ekran" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
   <button data-panel="settings" title="Ayarlar: tema, renkler, yazı tipi" style="margin-top:auto;margin-bottom:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </nav>
 </div>
+<div id="fullscreenStatus" role="status" aria-live="polite" hidden></div>
+<script src="fullscreen.js"></script>
 <script src="timeframe_menu.js"></script><script src="settings_backup.js"></script><script src="settings_backup_ui.js"></script>
 <script src="pine_convert.js"></script><script src="pine_style.js"></script><script src="ind_core.js"></script><script src="pine_library.js"></script><script src="ind_dialog.js"></script><script src="pine_editor.js"></script><script src="watchlist_import.js"></script><script src="watchlist_live.js"></script><script src="watchlist.js"></script>
 <script>
@@ -466,10 +473,10 @@ function openPanelByName(name) {
   if (openPanel === 'watchlist') stopWatchlistLive();
   if (name === 'settings' && openPanel !== 'settings') settingsSection = null;
   openPanel = name;
-  document.querySelectorAll("#rail button").forEach((x) => x.classList.toggle("on", x.dataset.panel === openPanel));
+  document.querySelectorAll("#rail button[data-panel]").forEach((x) => x.classList.toggle("on", x.dataset.panel === openPanel));
   $("dock").classList.remove("wide"); $("dock").hidden = !openPanel; if (openPanel) PANELS[openPanel]();
 }
-document.querySelectorAll("#rail button").forEach((b) => (b.onclick = () => {
+document.querySelectorAll("#rail button[data-panel]").forEach((b) => (b.onclick = () => {
   if (b.dataset.panel === "indicators") return openIndDlg();  // TradingView-style dialog, not a dock panel
   openPanelByName(openPanel === b.dataset.panel ? null : b.dataset.panel);
 }));
