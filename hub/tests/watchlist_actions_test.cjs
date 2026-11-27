@@ -1,0 +1,56 @@
+// Bulk selection and complete-list ranking with mocked daily snapshots and live feeds.
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require('../../build/node_modules/jsdom');
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn,ms=5000){const end=Date.now()+ms;while(Date.now()<end){if(fn())return;await delay(25);}throw Error('timed out waiting for condition');}
+(async()=>{
+  const dom=new JSDOM('<!doctype html><body><div id="dock"></div></body>',{url:'https://test.local/hub.html',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;
+  w.eval(fs.readFileSync('hub/watchlist_live.js','utf8'));
+  const streams=new Map(),stops=[];
+  const feed=broker=>({live(t,tf,onBar){const id=broker+':'+t;streams.set(id,onBar);return ()=>{streams.delete(id);stops.push(id);};}});
+  w.TRADEX_WEB=true;w.TXWebFeeds={feeds:{binance:feed('binance'),bybit:feed('bybit')}};
+  w.DATA={brokers:[],instruments:[]};w.st={broker:'binance',ticker:'ZETA',key:'Z'};w.openPanel='watchlist';w.$=id=>d.getElementById(id);w.inst=()=>null;w.push=()=>{};
+  w.TradeXMarketName=t=>t;w.TradeXMarketSource=(t,b)=>b;w.TradeXWatchlistImport={};
+  let confirmation=false,alerts=[];w.confirm=()=>confirmation;w.alert=x=>alerts.push(x);
+  const saved=[{key:'Z',broker:'binance',ticker:'ZETA'},{key:'A',broker:'bybit',ticker:'ALFA'},{key:'A',broker:'binance',ticker:'ALFA'},{key:'X',broker:'other',ticker:'X'}];
+  w.localStorage.setItem('chartHubWatchlist',JSON.stringify(saved));
+  let inflight=0,peak=0;const calls=[];
+  w.fetch=async url=>{const u=new URL(url,w.location.href),id=u.searchParams.get('source')+':'+u.searchParams.get('symbol');calls.push(id);inflight++;peak=Math.max(peak,inflight);await delay(15);inflight--;
+    const close={'binance:ZETA':100,'bybit:ALFA':120,'binance:ALFA':90}[id];
+    return {ok:close!==undefined,json:async()=>close===undefined?[]:[{time:1,close:100},{time:2,close}]};};
+  const dock=d.getElementById('dock');dock.getBoundingClientRect=()=>({top:0,bottom:100,height:100});
+  const nativeRect=w.Element.prototype.getBoundingClientRect;
+  w.Element.prototype.getBoundingClientRect=function(){if(this.classList.contains('watch-row')){const index=[...this.parentNode.children].indexOf(this);return index===0?{top:0,bottom:50}:{top:1000,bottom:1050};}return nativeRect.call(this);};
+  w.eval(fs.readFileSync('hub/watchlist.js','utf8')+'\nwindow.__watch={renderWatchlist,stopWatchlistLive};');
+  const order=()=>[...d.querySelectorAll('.watch-row')].map(r=>r.dataset.broker+':'+r.dataset.ticker);
+  const choose=value=>{const s=d.querySelector('.watch-sort');s.value=value;s.dispatchEvent(new w.Event('change'));};
+  const click=selector=>d.querySelector(selector).click();
+  w.__watch.renderWatchlist();await until(()=>calls.length>=1);
+  choose('name-asc');assert.deepEqual(order(),['binance:ALFA','bybit:ALFA','other:X','binance:ZETA']);
+  choose('name-desc');assert.deepEqual(order(),['binance:ZETA','other:X','binance:ALFA','bybit:ALFA']);
+  assert.deepEqual(JSON.parse(w.localStorage.getItem('chartHubWatchlist')),saved,'sorting does not overwrite insertion order');
+  choose('change-desc');await until(()=>d.querySelector('.watch-sort-note').textContent.includes('4/4'));await delay(1100);
+  assert.deepEqual(order(),['bybit:ALFA','binance:ZETA','binance:ALFA','other:X'],'snapshot covers off-screen entries; unavailable is last');
+  assert.ok(calls.includes('binance:ALFA')&&calls.includes('other:X'));assert.ok(peak<=4,'snapshot requests are bounded');
+  await until(()=>streams.has('bybit:ALFA'));streams.get('bybit:ALFA')({time:2,close:80},2000);await delay(1100);
+  assert.deepEqual(order(),['binance:ZETA','binance:ALFA','bybit:ALFA','other:X'],'visible live change reorders');
+  choose('change-asc');assert.deepEqual(order(),['bybit:ALFA','binance:ALFA','binance:ZETA','other:X']);
+  click('.watch-bulk');assert.equal(d.querySelectorAll('.watch-check').length,4);
+  const before=order();await until(()=>streams.has('bybit:ALFA'));streams.get('bybit:ALFA')({time:2,close:140},3000);await delay(1100);
+  assert.deepEqual(order(),before,'sorting does not move rows during selection');
+  const box=(broker,ticker)=>d.querySelector(`.watch-row[data-broker="${broker}"][data-ticker="${ticker}"] .watch-check`);
+  box('bybit','ALFA').click();box('binance','ALFA').click();assert.match(d.querySelector('.watch-delete-selected').textContent,/2/);
+  click('.watch-delete-selected');assert.equal(JSON.parse(w.localStorage.getItem('chartHubWatchlist')).length,4,'cancel confirmation');
+  confirmation=true;const setItem=w.Storage.prototype.setItem;w.Storage.prototype.setItem=function(k,v){if(k==='chartHubWatchlist')throw Error('quota');return setItem.call(this,k,v);};
+  click('.watch-delete-selected');assert.match(alerts.at(-1),/kaydedilemedi/);assert.equal(d.querySelectorAll('.watch-check:checked').length,2,'failed save preserves selection');
+  w.Storage.prototype.setItem=setItem;click('.watch-delete-selected');assert.deepEqual(JSON.parse(w.localStorage.getItem('chartHubWatchlist')).map(x=>x.ticker),['ZETA','X']);
+  assert.ok(stops.includes('bybit:ALFA'),'deleted live feed was stopped');assert.equal(d.querySelector('.watch-check'),null);
+  click('.watch-bulk');click('.watch-selection button');assert.equal(d.querySelectorAll('.watch-check:checked').length,2);click('.watch-selection button');assert.equal(d.querySelectorAll('.watch-check:checked').length,0);
+  click('.watch-selection button');click('.watch-delete-selected');assert.deepEqual(JSON.parse(w.localStorage.getItem('chartHubWatchlist')),[]);assert.ok(d.querySelector('.watch-empty'));assert.ok(d.querySelector('.watch-bulk').disabled);
+  // Even if a very tall viewport contains over 100 rows, ranking hydrates all rows.
+  w.openPanel='settings';w.__watch.stopWatchlistLive();await delay(30);w.openPanel='watchlist';dock.getBoundingClientRect=()=>({top:0,bottom:0,height:0});
+  const many=Array.from({length:105},(_,i)=>({key:'K'+i,broker:'other',ticker:'K'+i}));w.localStorage.setItem('chartHubWatchlist',JSON.stringify(many));
+  w.__watch.renderWatchlist();await until(()=>d.querySelector('.watch-sort-note').textContent.includes('105/105'),15000);
+  assert.ok(calls.includes('other:K104'),'ranking does not omit rows beyond the visible cap');assert.ok(peak<=4);
+  w.openPanel='settings';w.__watch.stopWatchlistLive();await delay(50);dom.window.close();console.log('Watchlist actions tests passed');
+})().catch(e=>{console.error(e.stack||e);process.exit(1)});

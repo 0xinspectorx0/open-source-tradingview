@@ -3,6 +3,8 @@
 const WATCH_KEY = 'chartHubWatchlist', WATCH_MAX = 500;
 let watchSeq = 0, watchQuotes = new Map(), watchAttempts = new Map(), watchPending = new Map(), watchRows = new Map();
 let watchImportOpen = false, watchImportText = '', watchImportStatus = '', watchImportBusy = false;
+let watchSort = 'added', watchSelectMode = false, watchSelected = new Set(), watchSortLoaded = new Set(), watchSortTimer;
+const watchCollator = new Intl.Collator('tr', {numeric:true, sensitivity:'base'});
 function watchItems() {
   try {
     const rows = JSON.parse(localStorage.getItem(WATCH_KEY) || '[]');
@@ -37,6 +39,42 @@ function importWatchSymbols(text, filename) {
   return result;
 }
 function watchId(item) { return item.broker + '\0' + item.ticker; }
+function watchPercent(q) {
+  return q && Number.isFinite(q.last) && Number.isFinite(q.prev) && q.prev !== 0 ? (q.last / q.prev - 1) * 100 : NaN;
+}
+function watchSorted(rows) {
+  if (watchSort === 'added') return rows.slice();
+  const direction = watchSort.endsWith('-desc') ? -1 : 1;
+  return rows.map((item,index) => ({item,index})).sort((a,b) => {
+    if (watchSort.startsWith('change-')) {
+      const x = watchPercent(watchQuotes.get(watchId(a.item))), y = watchPercent(watchQuotes.get(watchId(b.item)));
+      if (Number.isFinite(x) !== Number.isFinite(y)) return Number.isFinite(x) ? -1 : 1;
+      if (Number.isFinite(x) && x !== y) return (x - y) * direction;
+    }
+    const x = TradeXMarketName(a.item.ticker,a.item.broker), y = TradeXMarketName(b.item.ticker,b.item.broker);
+    const name = watchCollator.compare(x,y);
+    if (name) return name * (watchSort.startsWith('name-') ? direction : 1);
+    return watchCollator.compare(a.item.broker,b.item.broker) || watchCollator.compare(a.item.ticker,b.item.ticker) || a.index - b.index;
+  }).map(x => x.item);
+}
+function queueWatchSort() {
+  if (!watchSort.startsWith('change-') || watchSelectMode || watchSortTimer) return;
+  watchSortTimer = setTimeout(() => {
+    watchSortTimer = null;
+    if (openPanel !== 'watchlist' || document.hidden || watchSelectMode || !watchSort.startsWith('change-')) return;
+    const list = document.querySelector('.watch-list'); if (!list) return;
+    const ordered = watchSorted(watchItems()).map(x => watchRows.get(watchId(x))).filter(Boolean);
+    if (ordered.some((row,i) => list.children[i] !== row)) {
+      for (const row of ordered) list.appendChild(row);
+      refreshWatchlist();
+    }
+  }, 1000);
+}
+function updateWatchSortNote() {
+  const note = document.querySelector('.watch-sort-note'); if (!note) return;
+  const rows = watchItems(), done = rows.filter(x => watchSortLoaded.has(watchId(x))).length;
+  note.textContent = `Değişim sıralaması: ${done}/${rows.length} sembol kontrol edildi. Görünmeyenler bir kez alınır; yalnız görünenler güncellenir. Veri yoksa sonda gösterilir.${watchSelectMode ? ' Seçim sırasında sıralama sabittir.' : ''}`;
+}
 function watchQuote(item) {
   const id = watchId(item); if (!watchQuotes.has(id)) watchQuotes.set(id, TradeXWatchlistLive.state());
   return watchQuotes.get(id);
@@ -45,13 +83,14 @@ function paintWatchQuote(item) {
   const row = watchRows.get(watchId(item));
   if (!row || !row.isConnected) return;
   const q = watchQuote(item), price = row.querySelector('.watch-price b'), change = row.querySelector('.watch-price small'), status = row.querySelector('.watch-state');
-  const pct = Number.isFinite(q.last) && Number.isFinite(q.prev) && q.prev !== 0 ? (q.last / q.prev - 1) * 100 : NaN;
+  const pct = watchPercent(q);
   price.textContent = Number.isFinite(q.last) ? q.last.toLocaleString(undefined, {maximumFractionDigits:8}) : '—';
   change.textContent = Number.isFinite(pct) ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—';
   change.style.color = Number.isFinite(pct) && pct !== 0 ? (pct > 0 ? 'var(--ok)' : 'var(--bad)') : '';
   const stale = q.updatedAt && Date.now() - q.updatedAt > 120000;
   status.textContent = stale ? `${q.status} · güncelleme yok` : q.status;
   row.querySelector('.watch-price').title = q.updatedAt ? `Son veri: ${new Date(q.updatedAt).toLocaleTimeString()} · önceki günlük kapanışa göre değişim` : 'Veri bekleniyor';
+  queueWatchSort();
 }
 const watchLive = TradeXWatchlistLive.create({
   web:!!window.TRADEX_WEB, feeds:window.TXWebFeeds && window.TXWebFeeds.feeds, EventSourceClass:window.EventSource,
@@ -67,6 +106,7 @@ const watchLive = TradeXWatchlistLive.create({
 });
 function stopWatchlistLive() {
   watchSeq++; watchLive.close();
+  clearTimeout(watchSortTimer); watchSortTimer = null; watchSortLoaded.clear();
   for (const entry of watchPending.values()) entry.abort();
   watchPending.clear();
 }
@@ -74,7 +114,9 @@ function markWatchlist() {
   document.querySelectorAll('.watch-row').forEach(row => row.classList.toggle('active', row.dataset.ticker === st.ticker && row.dataset.broker === st.broker));
 }
 function renderWatchlist() {
-  const d = $('dock'), rows = watchItems(), scrollTop = d.scrollTop;
+  const d = $('dock'), saved = watchItems(), rows = watchSorted(saved), scrollTop = d.scrollTop;
+  const ids = new Set(saved.map(watchId));
+  for (const id of watchSelected) if (!ids.has(id)) watchSelected.delete(id);
   d.innerHTML = ''; watchRows.clear();
   const head = document.createElement('div'); head.className = 'watch-head';
   const title = document.createElement('strong'); title.textContent = 'İzleme listesi';
@@ -84,6 +126,45 @@ function renderWatchlist() {
   const search = document.createElement('button'); search.textContent = '+ Ara'; search.title = 'Sembol ara ve ekle'; search.style.marginLeft = '4px';
   search.onclick = () => { if (window.openSymDlg) window.openSymDlg('', addWatch); };
   buttons.append(current, search); head.append(title, buttons); d.appendChild(head);
+  const controls = document.createElement('div'); controls.className = 'watch-controls';
+  const sortLabel = document.createElement('label'); sortLabel.textContent = 'Sırala';
+  const sort = document.createElement('select'); sort.className = 'watch-sort'; sort.setAttribute('aria-label','İzleme listesini sırala');
+  for (const [value,label] of [['added','Eklenme sırası'],['name-asc','Ad A → Z'],['name-desc','Ad Z → A'],['change-desc','Değişim yüksek → düşük'],['change-asc','Değişim düşük → yüksek']]) {
+    const option = document.createElement('option'); option.value = value; option.textContent = label; sort.appendChild(option);
+  }
+  sort.value = watchSort;
+  sort.onchange = () => { watchSort = sort.value; watchSortLoaded.clear(); renderWatchlist(); };
+  sortLabel.appendChild(sort); controls.appendChild(sortLabel);
+  const bulk = document.createElement('button'); bulk.type = 'button'; bulk.className = 'watch-bulk';
+  bulk.textContent = watchSelectMode ? 'İptal' : 'Toplu sil'; bulk.disabled = !rows.length && !watchSelectMode;
+  bulk.onclick = () => { watchSelectMode = !watchSelectMode; watchSelected.clear(); renderWatchlist(); };
+  controls.appendChild(bulk); d.appendChild(controls);
+  if (watchSelectMode) {
+    const selection = document.createElement('div'); selection.className = 'watch-selection';
+    const selectAll = document.createElement('button'); selectAll.type = 'button'; selectAll.textContent = 'Tümünü seç';
+    const removeSelected = document.createElement('button'); removeSelected.type = 'button'; removeSelected.className = 'watch-delete-selected';
+    const update = () => {
+      const all = rows.length > 0 && rows.every(item => watchSelected.has(watchId(item)));
+      selectAll.textContent = all ? 'Seçimi kaldır' : 'Tümünü seç';
+      removeSelected.textContent = `Seçilenleri sil (${watchSelected.size})`; removeSelected.disabled = !watchSelected.size;
+      for (const box of d.querySelectorAll('.watch-check')) box.checked = watchSelected.has(box._watchId);
+    };
+    selectAll.onclick = () => { if (rows.every(item => watchSelected.has(watchId(item)))) watchSelected.clear(); else for (const item of rows) watchSelected.add(watchId(item)); update(); };
+    removeSelected.onclick = () => {
+      const currentRows = watchItems(), removing = currentRows.filter(item => watchSelected.has(watchId(item)));
+      if (!removing.length) { watchSelected.clear(); update(); return; }
+      if (!confirm(`${removing.length} sembol izleme listesinden silinsin mi?`)) return;
+      if (!saveWatch(currentRows.filter(item => !watchSelected.has(watchId(item))))) { alert('İzleme listesi kaydedilemedi.'); return; }
+      for (const item of removing) {
+        const id = watchId(item); watchQuotes.delete(id); watchAttempts.delete(id); watchSortLoaded.delete(id);
+        const pending = watchPending.get(id); if (pending) { pending.abort(); watchPending.delete(id); }
+      }
+      watchSelected.clear(); watchSelectMode = false; renderWatchlist();
+    };
+    selection.append(selectAll, removeSelected); d.appendChild(selection);
+    // Row checkboxes are added below; update labels now and again after rendering.
+    update(); selection._updateWatchSelection = update;
+  }
   const section = document.createElement('details'); section.className = 'watch-import'; section.open = watchImportOpen;
   const summary = document.createElement('summary'); summary.textContent = 'Manuel / toplu ekle';
   const help = document.createElement('p'); help.textContent = `Sembolleri virgül veya satır ile ayırın (ör. BIST:THYAO, BIST:GARAN). TXT, CSV ve JSON desteklenir; mevcut liste korunur. En fazla ${WATCH_MAX} sembol.`;
@@ -114,9 +195,21 @@ function renderWatchlist() {
   };
   actions.append(add, upload, file); section.append(summary, help, text, actions, status); d.appendChild(section);
   const note = document.createElement('div'); note.className = 'watch-note'; note.textContent = 'Fiyat ve önceki günlük kapanışa göre değişim. Görünen ilk 20 uygun sembolde canlı akış; diğerleri periyodik. BIST verisi gecikmelidir.'; d.appendChild(note);
+  if (watchSort.startsWith('change-')) {
+    const sortNote = document.createElement('div'); sortNote.className = 'watch-sort-note'; sortNote.setAttribute('role','status'); d.appendChild(sortNote);
+    updateWatchSortNote();
+  }
   if (!rows.length) { const empty = document.createElement('div'); empty.className = 'watch-empty'; empty.textContent = 'Henüz sembol yok. Açık grafiği ekleyin veya arayın.'; d.appendChild(empty); }
+  const list = document.createElement('div'); list.className = 'watch-list'; d.appendChild(list);
   rows.forEach(item => {
     const row = document.createElement('div'); row.className = 'watch-row'; row.dataset.ticker = item.ticker; row.dataset.broker = item.broker;
+    if (watchSelectMode) {
+      const box = document.createElement('input'); box.type = 'checkbox'; box.className = 'watch-check'; box._watchId = watchId(item);
+      box.setAttribute('aria-label', `${TradeXMarketName(item.ticker,item.broker)} ${item.broker} seç`);
+      box.checked = watchSelected.has(box._watchId);
+      box.onchange = () => { if (box.checked) watchSelected.add(box._watchId); else watchSelected.delete(box._watchId); d.querySelector('.watch-selection')._updateWatchSelection(); };
+      row.appendChild(box);
+    }
     const button = document.createElement('button'); button.className = 'watch-open'; button.title = 'Grafikte aç';
     const identity = document.createElement('span'), name = document.createElement('b'), source = document.createElement('small');
     name.textContent = TradeXMarketName(item.ticker, item.broker);
@@ -134,10 +227,13 @@ function renderWatchlist() {
     const remove = document.createElement('button'); remove.className = 'watch-remove'; remove.textContent = '×'; remove.title = 'Listeden çıkar'; remove.setAttribute('aria-label', `${name.textContent} listeden çıkar`);
     remove.onclick = () => {
       if (!saveWatch(watchItems().filter(x => x.ticker !== item.ticker || x.broker !== item.broker))) { alert('İzleme listesi kaydedilemedi.'); return; }
-      watchQuotes.delete(item.broker + '\0' + item.ticker); watchAttempts.delete(item.broker + '\0' + item.ticker); renderWatchlist();
+      const id = watchId(item); watchQuotes.delete(id); watchAttempts.delete(id); watchSortLoaded.delete(id); watchSelected.delete(id);
+      const pending = watchPending.get(id); if (pending) { pending.abort(); watchPending.delete(id); }
+      renderWatchlist();
     };
-    row.append(button, remove); d.appendChild(row); watchRows.set(watchId(item), row); paintWatchQuote(item);
+    row.append(button, remove); list.appendChild(row); watchRows.set(watchId(item), row); paintWatchQuote(item);
   });
+  if (watchSelectMode) d.querySelector('.watch-selection')._updateWatchSelection();
   d.scrollTop = scrollTop; markWatchlist(); refreshWatchlist();
 }
 async function refreshWatchlist() {
@@ -148,8 +244,13 @@ async function refreshWatchlist() {
     if (!bounds.height) return true; // non-visual test environments
     const box = row.getBoundingClientRect(); return box.bottom >= bounds.top && box.top <= bounds.bottom;
   }).map(row => row.dataset.broker + '\0' + row.dataset.ticker));
-  const items = watchItems().filter(x => visible.has(watchId(x))).slice(0, 100);
-  watchLive.setTargets(items);
+  const saved = watchItems(), byId = new Map(saved.map(item => [watchId(item),item]));
+  const visibleItems = [...dock.querySelectorAll('.watch-row')].map(row => byId.get(row.dataset.broker + '\0' + row.dataset.ticker)).filter(item => item && visible.has(watchId(item))).slice(0, 100);
+  const visibleIds = new Set(visibleItems.map(watchId));
+  watchLive.setTargets(visibleItems);
+  // A percentage ranking needs a snapshot for the entire list, not just the viewport.
+  // Fetch each off-screen row once per sort session, with the same four-request cap.
+  const items = visibleItems.concat(watchSort.startsWith('change-') ? saved.filter(x => !visibleIds.has(watchId(x)) && !watchSortLoaded.has(watchId(x))) : []);
   // Live streams supply the last price; periodic D1 snapshots supply/reconcile the
   // previous close. Poll-only feeds use a shorter interval; BIST remains delayed.
   let index = 0;
@@ -158,9 +259,15 @@ async function refreshWatchlist() {
       const item = items[index++], id = watchId(item), q = watchQuote(item);
       const fallback = !watchLive.isActive(item) || /yeniden|kullanılamıyor/.test(q.status);
       const interval = item.broker === 'bist' || !fallback ? 60000 : 10000;
-      if (watchPending.has(id) || watchPending.size >= 4 || Date.now() - (watchAttempts.get(id) || 0) < interval) { paintWatchQuote(item); continue; }
+      if (watchPending.has(id) || watchPending.size >= 4) continue;
+      if (Date.now() - (watchAttempts.get(id) || 0) < interval) {
+        if (watchSort.startsWith('change-')) { watchSortLoaded.add(id); updateWatchSortNote(); }
+        if (visible.has(id)) paintWatchQuote(item);
+        continue;
+      }
       const started = Date.now(), abort = new AbortController(); watchPending.set(id, abort);
-      const timeout = setTimeout(() => abort.abort(), 12000);
+      let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; abort.abort(); }, 12000);
       try {
         const query = new URLSearchParams({symbol:item.ticker,source:item.broker,tf:'D1',limit:'2'});
         const response = await fetch('/api/bars?' + query, {signal:abort.signal});
@@ -178,7 +285,10 @@ async function refreshWatchlist() {
       } finally {
         clearTimeout(timeout);
         if (watchPending.get(id) === abort) watchPending.delete(id);
-        if (openPanel === 'watchlist' && !document.hidden) setTimeout(refreshWatchlist, 0);
+        if (openPanel === 'watchlist' && !document.hidden) {
+          if (watchSort.startsWith('change-') && watchRows.has(id) && (!abort.signal.aborted || timedOut)) { watchSortLoaded.add(id); updateWatchSortNote(); }
+          setTimeout(refreshWatchlist, 0);
+        }
       }
     }
   }

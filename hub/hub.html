@@ -69,7 +69,14 @@
   .watch-head { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-bottom:1px solid var(--line) }
   .watch-head strong { font-size:12px; text-transform:uppercase; letter-spacing:.05em }
   .watch-head button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:5px 8px; cursor:pointer }
-  .watch-note, .watch-empty { color:var(--dim); font-size:11px; padding:10px 12px; line-height:1.5 }
+  .watch-note, .watch-empty, .watch-sort-note { color:var(--dim); font-size:11px; padding:10px 12px; line-height:1.5 }
+  .watch-sort-note { padding-top:0 }
+  .watch-controls, .watch-selection { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px }
+  .watch-controls label { display:flex; align-items:center; gap:6px; flex:1; min-width:0 }
+  .watch-controls select { flex:1; min-width:0; max-width:100%; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:5px 3px; font:inherit }
+  .watch-controls button, .watch-selection button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:5px 7px; font:inherit; cursor:pointer; white-space:nowrap }
+  .watch-controls button:disabled, .watch-selection button:disabled { opacity:.5; cursor:default }
+  .watch-check { flex:none; margin-left:10px; accent-color:var(--accent); cursor:pointer }
   .watch-import { padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px }
   .watch-import summary { cursor:pointer; font-weight:600; color:var(--text) }
   .watch-import p { margin:7px 0; line-height:1.4; color:var(--dim) }

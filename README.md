@@ -154,7 +154,12 @@ Symbols are matched against currently available instruments. An instrument key w
 current source; `SOURCE:TICKER` selects a source, and an exact internal ticker can select a specific contract. If a
 symbol is unknown or still ambiguous, it is skipped and reported with suggestions rather than guessed. The operation
 adds to the existing list and reports duplicates and any items that exceed the 500-symbol limit; it never replaces the
-list. Choose an entry to open its exact source and market, or remove it with ×. The list is saved in the browser, not
+list. Choose an entry to open its exact source and market, or remove it with ×. **Toplu sil** enables selection;
+choose individual rows or **Tümünü seç**, then confirm **Seçilenleri sil** (or cancel without deleting). **Sırala**
+provides insertion order, name A–Z/Z–A, and daily change high–low/low–high without changing the stored insertion order.
+For percentage sorting the app fetches one bounded snapshot for each off-screen row; unavailable changes remain at the
+end. Only visible rows continue to refresh, so off-screen rankings may become stale. The ranking updates as visible
+prices change, but stays still during bulk selection. The list is saved in the browser, not
 synced between devices. For up to 20 visible eligible symbols, the watchlist subscribes to the source's live daily
 candle stream; the last price and its percentage versus the previous daily close update as data arrives. This is a
 session change, not necessarily a rolling 24-hour change. Other visible rows use periodic snapshots; scrolling swaps
