@@ -168,8 +168,10 @@
     "#txweb .m{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}" +
     "#txweb .x{margin-left:auto;background:none;border:0;color:#797e86;cursor:pointer;font:14px system-ui;padding:0 2px}#txweb .x:hover{color:#e8ecee}" +
     "html.txweb-banner #app{top:26px!important}" +
+    "html:fullscreen #txweb{display:none}html.txweb-banner:fullscreen #app{top:0!important}" +
+    "html:-webkit-full-screen #txweb{display:none}html.txweb-banner:-webkit-full-screen #app{top:0!important}" +
     "#brand .txlogo{width:20px;height:20px;border-radius:5px;vertical-align:-5px;margin-right:7px}" +
-    "@media (max-width:640px){#txweb .long{display:none}#txweb{gap:10px}}";
+    "@media (max-width:640px), (hover:none) and (pointer:coarse){#txweb{display:none}html.txweb-banner #app{top:0!important}}";
   document.head.appendChild(css);
   const top = window.parent === window;
   if (top) document.addEventListener("DOMContentLoaded", () => {
@@ -178,14 +180,26 @@
     if (brand && !brand.querySelector(".txlogo")) { const im = document.createElement("img"); im.className = "txlogo"; im.src = "web/brand/icon-64.png"; im.alt = ""; brand.prepend(im); }
     // Source and TradeX attribution remain available under Settings > Hakkında.
     // Vela's own attribution mark remains visible on the chart.
-    if (closed || !document.getElementById("app")) return;
-    const b = document.createElement("div"); b.id = "txweb";
-    b.innerHTML = `<span class="m"><b>TradeX web beta</b><span class="long"> &middot; borsalardan ücretsiz grafikler, tarayıcınızda</span></span>` +
-      `<a class="wl" href="${WAITLIST}" target="_blank" rel="noopener">Bekleme listesine katıl</a>` +
-      `<a href="${DESKTOP}" target="_blank" rel="noopener" title="MT5, alarmlar, emir akışı ve daha fazlası">Masaüstü sürümü<span class="long"> (MT5, alarmlar)</span></a>` +
-      `<button class="x" title="Gizle">&#x2715;</button>`;
-    b.querySelector(".x").onclick = () => { b.remove(); document.documentElement.classList.remove("txweb-banner"); try { sessionStorage.setItem("txwebBanner", "0"); } catch (_) {} };
-    document.body.appendChild(b); document.documentElement.classList.add("txweb-banner");
+    if (!document.getElementById("app")) return;
+    const mobile = window.matchMedia ? window.matchMedia('(max-width:640px), (hover:none) and (pointer:coarse)') : null;
+    let banner = null;
+    function updateBanner() {
+      if (closed || (mobile && mobile.matches)) {
+        if (banner) banner.remove(); banner = null;
+        document.documentElement.classList.remove('txweb-banner'); return;
+      }
+      if (banner) return;
+      banner = document.createElement("div"); banner.id = "txweb";
+      banner.innerHTML = `<span class="m"><b>TradeX web beta</b><span class="long"> &middot; borsalardan ücretsiz grafikler, tarayıcınızda</span></span>` +
+        `<a class="wl" href="${WAITLIST}" target="_blank" rel="noopener">Bekleme listesine katıl</a>` +
+        `<a href="${DESKTOP}" target="_blank" rel="noopener" title="MT5, alarmlar, emir akışı ve daha fazlası">Masaüstü sürümü<span class="long"> (MT5, alarmlar)</span></a>` +
+        `<button class="x" title="Gizle">&#x2715;</button>`;
+      banner.querySelector(".x").onclick = () => { closed = true; try { sessionStorage.setItem("txwebBanner", "0"); } catch (_) {} updateBanner(); };
+      document.body.appendChild(banner); document.documentElement.classList.add("txweb-banner");
+    }
+    updateBanner();
+    if (mobile && mobile.addEventListener) mobile.addEventListener('change', updateBanner);
+    else if (mobile && mobile.addListener) mobile.addListener(updateBanner);
   });
   F.probeAll();
 })();

@@ -37,6 +37,10 @@ free desktop version below.)
 - **Choose the price source in symbol search.** Click a source tag beside a result to open the same instrument on that feed.
   Only exact matches are joined, so gold tokens such as PAXG are kept separate from gold spot.
 - **Vela chart engine:** Pine Script, native indicators, drawing tools and layouts of up to 8 synced charts.
+- **Fullscreen:** use the right-hand **Tam ekran** button to expand the whole workspace; press it again or use the
+  browser's exit gesture (such as Esc) to leave. Fullscreen depends on browser support and embedding permissions;
+  some mobile browsers, including iPhone Safari, do not support fullscreen for web pages. The web promotion banner is
+  not shown on mobile or while fullscreen is active.
 - **Timeframes and locale:** weekly and monthly candles are aggregated from each feed’s daily bars using Monday-start weeks and calendar months (UTC calendar dates). History depth depends on the source. Order-flow footprint, delta and session volume profile do not support these two timeframes. The main interface defaults to Turkish and the chart timezone to Europe/Istanbul; saved layouts may retain their chosen timezone. Some custom plugins and feed messages remain in English.
 - **Deep history:** Vela loads 10,000 candles per chart (more in chart settings > Advanced), and fills any gap
   left by sleep or a reconnect before the next live candle.
